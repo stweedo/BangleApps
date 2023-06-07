@@ -1,0 +1,17 @@
+{
+  "id": "hypnobeat",
+  "name": "HypnoBeat Music Controls",
+  "shortName": "HypnoBeat",
+  "version": "0.01",
+  "description": "Control the music on your Gadgetbridge-connected phone",
+  "icon": "icon.png",
+  "type": "app",
+  "tags": "tools,bluetooth,gadgetbridge,music",
+  "supports": ["BANGLEJS2"],
+  "allow_emulator": false,
+  "storage": [
+    {"name":"hypnobeat.app.js","url":"app.js"},
+    {"name":"hypnobeat.boot.js","url":"boot.js"},
+    {"name":"hypnobeat.img","url":"icon.js","evaluate":true}
+  ],
+}
