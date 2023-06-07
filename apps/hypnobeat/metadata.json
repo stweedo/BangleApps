@@ -13,5 +13,5 @@
     {"name":"hypnobeat.app.js","url":"app.js"},
     {"name":"hypnobeat.boot.js","url":"boot.js"},
     {"name":"hypnobeat.img","url":"icon.js","evaluate":true}
-  ],
+  ]
 }
