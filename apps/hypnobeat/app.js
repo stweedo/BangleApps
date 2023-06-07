@@ -10,9 +10,10 @@ const CENTER_X = g.getWidth() / 2;
 const CENTER_Y = g.getHeight() / 2;
 
 // --------- VARIABLES ---------
-let isPlaying = false;
+let isPlaying;
 let artist = "Artist";
 let track = "Track";
+let previousTrack;
 let album = "Album";
 let totalDuration = 0;
 let currentPosition = 0;
@@ -172,7 +173,7 @@ function drawSkipButton(direction) {
 
 function drawVolumeIndicator(direction) {
   clearCenter();
-  thickness = 20;
+  let thickness = 20;
   let length = 60;
   if (direction === "up") {
     g.fillRect(CENTER_X - length / 2, CENTER_Y - thickness / 2, CENTER_X + length / 2, CENTER_Y + thickness / 2);
@@ -186,7 +187,7 @@ function drawVolumeIndicator(direction) {
 // --------- MUSIC CONTROL FUNCTIONS ---------
 
 function musicControl(controlType) {
-  touchEventTriggered = false;
+  touchEventTriggered = false; // Reset trigger flag when a new command comes in
   touchEventTriggered = true;
   Bangle.musicControl(controlType);
   switch (controlType) {
@@ -221,8 +222,9 @@ function displayPlayingState() {
 
 function togglePlayPauseUserInput() {
   Bangle.buzz(40);
-  isPlaying = !isPlaying;
-  if (isPlaying) {
+  let localIsPlaying = isPlaying; // create a local copy of isPlaying
+  localIsPlaying = !localIsPlaying; // toggle the local copy, not affecting the global isPlaying
+  if (localIsPlaying) {
     Bangle.musicControl("play");
   } else {
     Bangle.musicControl("pause");
@@ -252,7 +254,6 @@ Bangle.strokes = {
 };
 
 // --------- TIMER MANAGEMENT FUNCTIONS ---------
-
 function updateCurrentTrackPosition() {
   g.clearRect(36, g.getHeight() - 30, g.getWidth(), g.getHeight());
   g.setFont("6x8", 2);
@@ -265,48 +266,47 @@ function updateCurrentTrackPosition() {
   g.reset();
 }
 
-function manageTimer() {
-  clearInterval(trackTimeoutRef);  // Always clear the timer
-  startTime = getTime() - currentPosition;
-  trackTimeoutRef = setInterval(function () {
-    if (isPlaying) {
-      let elapsedTime = getTime() - startTime;
-      currentPosition = Math.floor(elapsedTime);
-      updateCurrentTrackPosition();
-    }
-  }, 1000);
+function manageTimer(shouldStart) {
+  clearInterval(trackTimeoutRef);
+  if (shouldStart) {
+    trackTimeoutRef = setInterval(function () {
+      if (isPlaying && track === previousTrack) {
+        let elapsedTime = getTime() - startTime;
+        currentPosition = Math.floor(elapsedTime);
+        updateCurrentTrackPosition();
+      } else {
+        currentPosition = 0;
+        clearInterval(trackTimeoutRef);
+      }
+    }, 1000);
+  }
 }
 
 // --------- GADGETBRIDGE MESSAGE HANDLING ---------
-
-function handleMusicState(msg) {
-    isPlaying = msg.state === "play";
-    currentPosition = msg.position;
-    displayPlayingState(isPlaying);
-    manageTimer();
-    setClearCenterTimeout();
-    updateCurrentTrackPosition();
-}
-
-function handleMusicInfo(msg) {
-    totalDuration = msg.dur;
-    artist = msg.artist;
-    album = msg.album;
-    track = msg.track;
-    setClearCenterTimeout();
-    updateCurrentTrackPosition();
-}
-
 function handleGadgetbridgeMessage(msg) {
     if (msg.t === 'musicstate') {
-        handleMusicState(msg);
-    } if (msg.t === 'musicinfo') {
-        handleMusicInfo(msg);
+        isPlaying = msg.state === "play";
+        currentPosition = msg.position;
+        startTime = getTime() - currentPosition;  // Adjust startTime based on currentPosition
+        displayPlayingState(isPlaying);
     }
+    if (msg.t === 'musicinfo') {
+        totalDuration = msg.dur;
+        artist = msg.artist;
+        album = msg.album;
+        track = msg.track;
+        if (track !== previousTrack) {
+          previousTrack = track;
+          currentPosition = 0;
+          startTime = getTime();
+        }
+    }
+    manageTimer(isPlaying);
+    setClearCenterTimeout();
+    updateCurrentTrackPosition();
 }
 
 // --------- MAIN ---------
-
 function initApp() {
   let buttonTimer;
   let buttonPressed = false;
