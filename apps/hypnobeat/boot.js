@@ -1,7 +1,7 @@
 // Run this code after a 1ms delay to ensure it's executed after the boot code
 setTimeout(() => {
-  // Check if the current file is "mymusic.app.js"
-  const APP = global.__FILE__ === "mymusic.app.js";
+  // Check if the current file is "hypnobeat.app.js"
+  const APP = global.__FILE__ === "hypnobeat.app.js";
 
   // Override the global GB function
   global.GB = ((_GB) => (event) => {
