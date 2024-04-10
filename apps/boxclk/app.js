@@ -9,7 +9,8 @@
   let locale = require("locale");
   let widgets = require("widget_utils");
   let date = new Date();
-  let bgImage;
+  let bgBuffer; // The offscreen buffer for the background
+  let hasBgBuffer = false; // Flag to check if the offscreen buffer has been created
   let configNumber = (storage.readJSON("boxclk.json", 1) || {}).selectedConfig || 0;
   let fileName = 'boxclk' + (configNumber > 0 ? `-${configNumber}` : '') + '.json';
   // Add a condition to check if the file exists, if it does not, default to 'boxclk.json'
@@ -36,6 +37,23 @@
   let h = g.getHeight();
   let totalWidth, totalHeight;
   let drawTimeout;
+
+  const createBgBuffer = () => {
+    // Check if the 'bg' key exists in boxesConfig and it has a valid 'img' property
+    if (boxesConfig.bg && boxesConfig.bg.img) {
+      // Use the require("Storage").read function to load the image
+      let bgImage = require("Storage").read(boxesConfig.bg.img);
+
+      if (bgImage) {
+        // Create the buffer with the dimensions of the screen
+        bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8 /* Bits per pixel for color */);
+
+        // Draw the image to the buffer
+        bgBuffer.drawImage(bgImage, 0, 0);
+        hasBgBuffer = true;
+      }
+    }
+  };
 
   /**
   * ---------------------------------------------------------------
@@ -72,9 +90,7 @@
   */
 
   for (let key in boxesConfig) {
-    if (key === 'bg' && boxesConfig[key].img) {
-      bgImage = storage.read(boxesConfig[key].img);
-    } else if (key !== 'selectedConfig') {
+    if (key !== 'selectedConfig' && key !== 'bg') {
       boxes[key] = Object.assign({}, boxesConfig[key]);
     }
   }
@@ -192,8 +208,8 @@
     } else {
       suffix = "th";
     }
-    let dayOfMonthStr = disableSuffix ? dayOfMonth : dayOfMonth + suffix;
-    return month + " " + dayOfMonthStr + (short ? '' : (", " + year)); // not including year for short version
+    let dateString = disableSuffix ? dayOfMonth : dayOfMonth + suffix;
+    return month + " " + dateString + (short ? '' : (", " + year)); // not including year for short version
   };
 
   let getDayOfWeek = function(date, short) {
@@ -224,8 +240,10 @@
     return function(boxes) {
       date = new Date();
       g.clear();
-      if (bgImage) {
-        g.drawImage(bgImage, 0, 0);
+      if (hasBgBuffer) {
+        g.drawImage({width: bgBuffer.getWidth(), height: bgBuffer.getHeight(), bpp: bgBuffer.getBPP(), buffer: bgBuffer.buffer}, 0, 0);
+      } else if (bgImage) {
+        g.drawImage(E.toArrayBuffer(bgImage), 0, 0);
       }
       if (boxes.time) {
         boxes.time.string = modString(boxes.time, locale.time(date, isBool(boxes.time.short, true) ? 1 : 0));
@@ -280,7 +298,7 @@
   * ---------------------------------------------------------------
   */
 
-  let touchInText = function(e, boxItem, boxKey) {
+  let touchInBox = function(e, boxItem, boxKey) {
     calcBoxSize(boxItem);
     const pos = calcBoxPos(boxKey);
     return e.x >= pos.x1 &&
@@ -313,7 +331,7 @@
       wasDragging = Object.assign({}, isDragging);
       let boxTouched = false;
       boxKeys.forEach((boxKey) => {
-        if (touchInText(e, boxes[boxKey], boxKey)) {
+        if (touchInBox(e, boxes[boxKey], boxKey)) {
           isDragging[boxKey] = true;
           wasDragging[boxKey] = true;
           boxTouched = true;
@@ -411,5 +429,6 @@
   Bangle.loadWidgets();
   widgets.swipeOn();
   modSetColor();
+  createBgBuffer(); // Create the background buffer
   setup();
 }
