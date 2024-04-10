@@ -10,7 +10,12 @@ if (stepGoal == undefined) {
   stepGoal = d != undefined && d.settings != undefined ? d.settings.goal : 10000;
 }
 
-// Load the settings, with defaults
+/// How many times has addInteractive been called?
+exports.loadCount = 0;
+/// A list of all the instances returned by addInteractive
+exports.clockInfos = [];
+
+/// Load the settings, with defaults
 exports.loadSettings = function() {
   return Object.assign({
       hrmOn : 0, // 0(Always), 1(Tap)
@@ -22,6 +27,7 @@ exports.loadSettings = function() {
   );
 };
 
+/// Load a list of ClockInfos - this does not cache and reloads each time
 exports.load = function() {
   var settings = exports.loadSettings();
   delete settings.apps; // keep just the basic settings in memory
@@ -63,7 +69,7 @@ exports.load = function() {
         } else img=atob("GBiBAAABgAADwAAHwAAPgACfAAHOAAPkBgHwDwP4Hwf8Pg/+fB//OD//kD//wD//4D//8D//4B//QB/+AD/8AH/4APnwAHAAACAAAA==");
         return {
           text : v + "%", v : v, min:0, max:100, img : img
-        }
+        };
       },
       show : function() { this.interval = setInterval(()=>this.emit('redraw'), 60000); Bangle.on("charging", batteryUpdateHandler); batteryUpdateHandler(); },
       hide : function() { clearInterval(this.interval); delete this.interval; Bangle.removeListener("charging", batteryUpdateHandler); },
@@ -73,7 +79,7 @@ exports.load = function() {
       get : () => { let v = Bangle.getHealthStatus("day").steps; return {
           text : v, v : v, min : 0, max : stepGoal,
         img : atob("GBiBAAcAAA+AAA/AAA/AAB/AAB/gAA/g4A/h8A/j8A/D8A/D+AfH+AAH8AHn8APj8APj8AHj4AHg4AADAAAHwAAHwAAHgAAHgAADAA==")
-      }},
+      };},
       show : function() { Bangle.on("step", stepUpdateHandler); stepUpdateHandler(); },
       hide : function() { Bangle.removeListener("step", stepUpdateHandler); },
     },
@@ -82,7 +88,7 @@ exports.load = function() {
       get : () => { return {
         text : (hrm||"--") + " bpm", v : hrm, min : 40, max : 200,
         img : atob("GBiBAAAAAAAAAAAAAAAAAAAAAADAAADAAAHAAAHjAAHjgAPngH9n/n82/gA+AAA8AAA8AAAcAAAYAAAYAAAAAAAAAAAAAAAAAAAAAA==")
-      }},
+      };},
       run : function() {
         Bangle.setHRMPower(1,"clkinfo");
         if (settings.hrmOn==1/*Tap*/) {
@@ -131,11 +137,11 @@ exports.load = function() {
   require("Storage").list(/clkinfo.js$/).forEach(fn => {
     try{
       var a = eval(require("Storage").read(fn))();
-      var b = menu.find(x => x.name === a.name)
+      var b = menu.find(x => x.name === a.name);
       if(b) b.items = b.items.concat(a.items);
       else menu = menu.concat(a);
     } catch(e){
-      console.log("Could not load clock info "+E.toJS(fn))
+      console.log("Could not load clock info "+E.toJS(fn)+": "+e);
     }
   });
 
@@ -204,11 +210,12 @@ exports.addInteractive = function(menu, options) {
   if ("function" == typeof options) options = {draw:options}; // backwards compatibility
   options.index = 0|exports.loadCount;
   exports.loadCount = options.index+1;
+  exports.clockInfos[options.index] = options;
   options.focus = options.index==0 && options.x===undefined; // focus if we're the first one loaded and no position has been defined
   const appName = (options.app||"default")+":"+options.index;
 
   // load the currently showing clock_infos
-  let settings = exports.loadSettings()
+  let settings = exports.loadSettings();
   if (settings.apps[appName]) {
     let a = settings.apps[appName].a|0;
     let b = settings.apps[appName].b|0;
@@ -217,6 +224,13 @@ exports.addInteractive = function(menu, options) {
       options.menuB = b;
     }
   }
+  const save = () => {
+    // save the currently showing clock_info
+    const settings = exports.loadSettings();
+    settings.apps[appName] = {a:options.menuA, b:options.menuB};
+    require("Storage").writeJSON("clock_info.json",settings);
+  };
+  E.on("kill", save);
 
   if (options.menuA===undefined) options.menuA = 0;
   if (options.menuB===undefined) options.menuB = Math.min(exports.loadCount, menu[options.menuA].items.length)-1;
@@ -227,7 +241,7 @@ exports.addInteractive = function(menu, options) {
     options.redrawHandler = ()=>drawItem(itm);
     itm.on('redraw', options.redrawHandler);
     itm.uses = (0|itm.uses)+1;
-    if (itm.uses==1) itm.show();
+    if (itm.uses==1) itm.show(options);
     itm.emit("redraw");
   }
   function menuHideItem(itm) {
@@ -235,7 +249,7 @@ exports.addInteractive = function(menu, options) {
     delete options.redrawHandler;
     itm.uses--;
     if (!itm.uses)
-      itm.hide();
+      itm.hide(options);
   }
   // handling for swipe between menu items
   function swipeHandler(lr,ud){
@@ -259,52 +273,61 @@ exports.addInteractive = function(menu, options) {
         //can happen for dynamic ones (alarms, events)
         //in the worst case we come back to 0
       } while(menu[options.menuA].items.length==0);
+      // When we change, ensure we don't display the same thing as another clockinfo if we can avoid it
+      while ((options.menuB < menu[options.menuA].items.length) &&
+             exports.clockInfos.some(m => (m!=options) && m.menuA==options.menuA && m.menuB==options.menuB))
+          options.menuB++;
     }
     if (oldMenuItem) {
       menuHideItem(oldMenuItem);
       oldMenuItem.removeAllListeners("draw");
       menuShowItem(menu[options.menuA].items[options.menuB]);
     }
-    // save the currently showing clock_info
-    let settings = exports.loadSettings();
-    settings.apps[appName] = {a:options.menuA,b:options.menuB};
-    require("Storage").writeJSON("clock_info.json",settings);
     // On 2v18+ firmware we can stop other event handlers from being executed since we handled this
     E.stopEventPropagation&&E.stopEventPropagation();
   }
   Bangle.on("swipe",swipeHandler);
+  const blur = () => {
+    options.focus=false;
+    delete Bangle.CLKINFO_FOCUS;
+    const itm = menu[options.menuA].items[options.menuB];
+    let redraw = true;
+    if (itm.blur && itm.blur(options) === false)
+      redraw = false;
+    if (redraw) options.redraw();
+  };
+  const focus = () => {
+    let redraw = true;
+    Bangle.CLKINFO_FOCUS=true;
+    if (!options.focus) {
+      options.focus=true;
+      const itm = menu[options.menuA].items[options.menuB];
+      if (itm.focus && itm.focus(options) === false)
+        redraw = false;
+    }
+    if (redraw) options.redraw();
+  };
   let touchHandler, lockHandler;
   if (options.x!==undefined && options.y!==undefined && options.w && options.h) {
     touchHandler = function(_,e) {
       if (e.x<options.x || e.y<options.y ||
           e.x>(options.x+options.w) || e.y>(options.y+options.h)) {
-        if (options.focus) {
-          options.focus=false;
-          delete Bangle.CLKINFO_FOCUS;
-          options.redraw();
-        }
+        if (options.focus)
+          blur();
         return; // outside area
       }
       if (!options.focus) {
-        options.focus=true; // if not focussed, set focus
-        Bangle.CLKINFO_FOCUS=true;
-        options.redraw();
+        focus();
       } else if (menu[options.menuA].items[options.menuB].run) {
         Bangle.buzz(100, 0.7);
-        menu[options.menuA].items[options.menuB].run(); // allow tap on an item to run it (eg home assistant)
-      } else {
-        options.focus=true;
-        Bangle.CLKINFO_FOCUS=true;
+        menu[options.menuA].items[options.menuB].run(options); // allow tap on an item to run it (eg home assistant)
       }
     };
     Bangle.on("touch",touchHandler);
     if (settings.defocusOnLock) {
       lockHandler = function() {
-        if(options.focus) {
-          options.focus=false;
-          delete Bangle.CLKINFO_FOCUS;
-          options.redraw();
-        }
+        if(options.focus)
+          blur();
       };
       Bangle.on("lock", lockHandler);
     }
@@ -313,12 +336,15 @@ exports.addInteractive = function(menu, options) {
   menuShowItem(menu[options.menuA].items[options.menuB]);
   // return an object with info that can be used to remove the info
   options.remove = function() {
+    save();
+    E.removeListener("kill", save);
     Bangle.removeListener("swipe",swipeHandler);
     if (touchHandler) Bangle.removeListener("touch",touchHandler);
     if (lockHandler) Bangle.removeListener("lock", lockHandler);
     delete Bangle.CLKINFO_FOCUS;
     menuHideItem(menu[options.menuA].items[options.menuB]);
     exports.loadCount--;
+    delete exports.clockInfos[options.index];
   };
   options.redraw = function() {
     drawItem(menu[options.menuA].items[options.menuB]);
@@ -339,8 +365,8 @@ exports.addInteractive = function(menu, options) {
     menuShowItem(menu[options.menuA].items[options.menuB]);
 
     return true;
-  }
-
+  };
+  if (options.focus) focus();
   delete settings; // don't keep settings in RAM - save space
   return options;
 };

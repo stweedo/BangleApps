@@ -16,9 +16,11 @@
   if (settings.vibrate == undefined) settings.vibrate = "..";
   require('Storage').writeJSON("android.settings.json", settings);
   var _GB = global.GB;
+  let fetchRecInterval;
   global.GB = (event) => {
     // feed a copy to other handlers if there were any
     if (_GB) setTimeout(_GB,0,Object.assign({},event));
+
 
     /* TODO: Call handling, fitness */
     var HANDLERS = {
@@ -81,14 +83,20 @@
         for (var j = 0; j < event.d.length; j++) {
           // prevents all alarms from going off at once??
           var dow = event.d[j].rep;
-          if (!dow) dow = 127; //if no DOW selected, set alarm to all DOW
+          var rp = false;
+          if (!dow) {
+            dow = 127; //if no DOW selected, set alarm to all DOW
+          } else {
+            rp = true;
+          }
           var last = (event.d[j].h * 3600000 + event.d[j].m * 60000 < currentTime) ? (new Date()).getDate() : 0;
           var a = require("sched").newDefaultAlarm();
           a.id = "gb"+j;
           a.appid = "gbalarms";
-          a.on = true;
+          a.on = event.d[j].on !== undefined ? event.d[j].on : true;
           a.t = event.d[j].h * 3600000 + event.d[j].m * 60000;
           a.dow = ((dow&63)<<1) | (dow>>6); // Gadgetbridge sends DOW in a different format
+          a.rp = rp;
           a.last = last;
           alarms.push(a);
         }
@@ -193,9 +201,79 @@
         Bangle.on('HRM',actHRMHandler);
         actInterval = setInterval(function() {
           var steps = Bangle.getStepCount();
-          gbSend({ t: "act", stp: steps-lastSteps, hrm: lastBPM });
+          gbSend({ t: "act", stp: steps-lastSteps, hrm: lastBPM, rt:1 });
           lastSteps = steps;
         }, event.int*1000);
+      },
+      // {t:"actfetch", ts:long}
+      "actfetch": function() {
+        gbSend({t: "actfetch", state: "start"});
+        var actCount = 0;
+        var actCb = function(r) {
+          // The health lib saves the samples at the start of the 10-minute block
+          // However, GB expects them at the end of the block, so let's offset them
+          // here to keep a consistent API in the health lib
+          var sampleTs = r.date.getTime() + 600000;
+          if (sampleTs >= event.ts) {
+            gbSend({
+              t: "act",
+              ts: sampleTs,
+              stp: r.steps,
+              hrm: r.bpm,
+              mov: r.movement
+            });
+            actCount++;
+          }
+        }
+        if (event.ts != 0) {
+          require("health").readAllRecordsSince(new Date(event.ts - 600000), actCb);
+        } else {
+          require("health").readFullDatabase(actCb);
+        }
+        gbSend({t: "actfetch", state: "end", count: actCount});
+      },
+      //{t:"listRecs", id:"20230616a"}
+      "listRecs": function() {
+        let recs = require("Storage").list(/^recorder\.log.*\.csv$/,{sf:true}).map(s => s.slice(12, 21));
+        if (event.id.length > 2) { // Handle if there was no id supplied. Then we send a list all available recorder logs back.
+          let firstNonsyncedIdx = recs.findIndex((logId) => logId > event.id);
+          if (-1 == firstNonsyncedIdx) {
+            recs = []
+          } else {
+            recs = recs.slice(firstNonsyncedIdx);
+          }
+        }
+        gbSend({t:"actTrksList", list: recs}); // TODO: split up in multiple transmissions?
+      },
+      //{t:"fetchRec", id:"20230616a"}
+      "fetchRec": function() {
+        // TODO: Decide on what names keys should have.
+        if (fetchRecInterval) {
+          clearInterval(fetchRecInterval);
+          fetchRecInterval = undefined;
+        }
+        if (event.id=="stop") {
+          return
+        } else {
+          let log = require("Storage").open("recorder.log"+event.id+".csv","r");
+          let lines = "init";// = log.readLine();
+          let pkgcnt = 0;
+          gbSend({t:"actTrk", log:event.id, lines:"erase", cnt:pkgcnt}); // "erase" will prompt Gadgetbridge to erase the contents of a already fetched log so we can rewrite it without keeping lines from the previous (probably failed) fetch.
+          let sendlines = ()=>{
+            lines = log.readLine();
+            for (var i = 0; i < 3; i++) {
+              let line = log.readLine();
+              if (line) lines += line;
+            }
+            pkgcnt++;
+            gbSend({t:"actTrk", log:event.id, lines:lines, cnt:pkgcnt});
+            if (!lines && fetchRecInterval) {
+              clearInterval(fetchRecInterval);
+              fetchRecInterval = undefined;
+            }
+          }
+          fetchRecInterval = setInterval(sendlines, 50)
+        }
       },
       "nav": function() {
         event.id="nav";
@@ -209,6 +287,11 @@
           event.t="remove";
         }
         require("messages").pushMessage(event);
+      },
+      "cards" : function() {
+        // we receive all, just override what we have
+        if (Array.isArray(event.d))
+          require("Storage").writeJSON("android.cards.json", event.d);
       }
     };
     var h = HANDLERS[event.t];
@@ -231,6 +314,7 @@
     //send the request
     var req = {t: "http", url:url, id:options.id};
     if (options.xpath) req.xpath = options.xpath;
+    if (options.return) req.return = options.return; // for xpath
     if (options.method) req.method = options.method;
     if (options.body) req.body = options.body;
     if (options.headers) req.headers = options.headers;
@@ -252,6 +336,7 @@
   Bangle.on("charging", sendBattery);
   NRF.on("connect", () => setTimeout(function() {
     sendBattery();
+    gbSend({t: "ver", fw: process.env.VERSION, hw: process.env.HWVERSION});
     GB({t:"force_calendar_sync_start"}); // send a list of our calendar entries to start off the sync process
   }, 2000));
   NRF.on("disconnect", () => {
@@ -263,10 +348,9 @@
       require("messages").clearAll();
   });
   setInterval(sendBattery, 10*60*1000);
-  // Health tracking
-  Bangle.on('health', health=>{
-    if (actInterval===undefined) // if 'realtime' we do it differently
-      gbSend({ t: "act", stp: health.steps, hrm: health.bpm });
+  // Health tracking - if 'realtime' data is sent with 'rt:1', but let's still send our activity log every 10 mins
+  Bangle.on('health', h=>{
+    gbSend({ t: "act", stp: h.steps, hrm: h.bpm, mov: h.movement });
   });
   // Music control
   Bangle.musicControl = cmd => {

@@ -44,7 +44,7 @@ exports.input = function(options) {
   function displayText(hideMarker) {
     layout.clear(layout.text);
 
-    let charsBeforeCursor = textIndex;
+    //let charsBeforeCursor = textIndex;
     let charsAfterCursor = Math.min(text.length - textIndex, (textWidth)/2);
     
 
@@ -154,6 +154,7 @@ exports.input = function(options) {
         displayText(false);
       }
     }
+    E.stopEventPropagation&&E.stopEventPropagation();
   }
 
   function onHelp(resolve,reject) {
@@ -161,7 +162,7 @@ exports.input = function(options) {
     E.showPrompt(
       helpMessage, {title: "Help", buttons : {"Ok":true}}
     ).then(function(v) {
-      Bangle.on('swipe', onSwipe);
+      if (Bangle.prependListener) {Bangle.prependListener('swipe', onSwipe);} else {Bangle.on('swipe', onSwipe);}
       generateLayout(resolve,reject);
       layout.render();
     });
@@ -208,7 +209,7 @@ exports.input = function(options) {
     } else {
       generateLayout(resolve,reject);
       displayText(false);
-      Bangle.on('swipe', onSwipe);
+      if (Bangle.prependListener) {Bangle.prependListener('swipe', onSwipe);} else {Bangle.on('swipe', onSwipe);}
       layout.render();
     }
   });

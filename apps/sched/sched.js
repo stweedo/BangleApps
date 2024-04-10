@@ -36,6 +36,7 @@ function showAlarm(alarm) {
         alarm.ot = alarm.t;
       }
       alarm.t += settings.defaultSnoozeMillis;
+      alarm.t %= 86400000;
       Bangle.emit("alarmSnooze", alarm);
     } else {
       let del = alarm.del === undefined ? settings.defaultDeleteExpiredTimers : alarm.del;
@@ -71,7 +72,7 @@ function showAlarm(alarm) {
 
     const pattern = alarm.vibrate || (alarm.timer ? settings.defaultTimerPattern : settings.defaultAlarmPattern);
     require("buzz").pattern(pattern).then(() => {
-      if (buzzCount--) {
+      if (buzzCount == null || buzzCount--) {
         setTimeout(buzz, settings.buzzIntervalMillis);
       } else if (alarm.as) { // auto-snooze
         buzzCount = settings.buzzCount;
@@ -102,7 +103,7 @@ function showAlarm(alarm) {
         date = new Date(date.getFullYear() + rp.num, date.getMonth(), alarm.od);
         if (date.getDate() != alarm.od) date.setDate(0);
         break;
-      default: 
+      default:
         console.log(`sched: unknown repeat '${JSON.stringify(rp)}'`);
         break;
     }

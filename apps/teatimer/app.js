@@ -13,7 +13,8 @@ const states = {
   stop: 32 // timer stopped
 };
 var state = states.start;
-E.setTimeZone(1);
+let setting = require("Storage").readJSON("setting.json",1);
+E.setTimeZone(setting.timezone);
 
 // Title showing current time
 function appTitle() {
@@ -21,7 +22,7 @@ function appTitle() {
 }
 
 function currentTime() {
-  min = Date().getMinutes();
+  let min = Date().getMinutes();
   if (min < 10) min = "0" + min;
   return Date().getHours() + ":" + min;
 }

@@ -219,14 +219,14 @@ function barometerPressureHandler(e) {
   const pressure = e.pressure;
   if (isValidPressureValue(pressure)) {
     currentPressures.unshift(pressure);
-    median = currentPressures.slice().sort();
+    let median = currentPressures.slice().sort();
 
     if (median.length > 10) {
       var mid = median.length >> 1;
       medianPressure = Math.round(E.sum(median.slice(mid - 4, mid + 5)) / 9);
       if (medianPressure > 0) {
         turnOff();
-        draw();
+        WIDGETS.baroalarm.draw();
         handlePressureValue(medianPressure);
       }
     }
@@ -253,13 +253,6 @@ function turnOff() {
 }
 
 function draw() {
-  if (global.WIDGETS != undefined && typeof global.WIDGETS === "object") {
-    global.WIDGETS["baroalarm"] = {
-      width : setting("show") ? 24 : 0,
-      area : "tr",
-      draw : draw
-    };
-  }
   g.reset();
 
   if (this.x == undefined || this.y != 0)
@@ -270,9 +263,6 @@ function draw() {
   if (setting("show")) {
     g.setFont("6x8", 1).setFontAlign(1, 0);
     if (medianPressure == undefined) {
-      // trigger a new check
-      getPressureValue();
-
       // lets load last value from log (if available)
       if (history3.length > 0) {
         medianPressure = history3[history3.length - 1]["p"];
@@ -297,8 +287,24 @@ function draw() {
   }
 }
 
-if (interval > 0) {
-  setInterval(getPressureValue, interval * 60000);
+WIDGETS["baroalarm"] = {
+  width : setting("show") ? 24 : 0,
+  area : "tr",
+  draw : draw
+};
+
+// delay pressure measurement by interval-lastrun
+const lastRun = history3.length > 0 ? history3[history3.length-1].ts : 0;
+const lastRunAgo = Math.round(Date.now() / 1000) - lastRun;
+let diffNextRun = interval*60-lastRunAgo;
+if (diffNextRun < 0) {
+  diffNextRun = 0; // run asap
 }
-getPressureValue();
+setTimeout(() => {
+  if (interval > 0) {
+    setInterval(getPressureValue, interval * 60000);
+  }
+  getPressureValue();
+}, diffNextRun*1000);
+
 })();
