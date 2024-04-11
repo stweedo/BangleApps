@@ -1,7 +1,7 @@
 {
   "time": {
-    "font": "6x8",
-    "fontSize": 3,
+    "font": "BrunoAce",
+    "fontSize": 2,
     "outline": 2,
     "color": "#0ff",
     "outlineColor": "#00f",
@@ -11,13 +11,13 @@
     "xOffset": 2,
     "yOffset": 0,
     "boxPos": {
-      "x": "0.33",
-      "y": "0.29"
+      "x": "0.329",
+      "y": "0.330"
     }
   },
   "meridian": {
-    "font": "6x8",
-    "fontSize": 2,
+    "font": "BrunoAce",
+    "fontSize": 1,
     "outline": 1,
     "color": "#FF9900",
     "outlineColor": "fg",
@@ -27,14 +27,14 @@
     "xOffset": 2,
     "yOffset": 1,
     "boxPos": {
-      "x": "0.34",
-      "y": "0.46"
+      "x": "0.339",
+      "y": "0.512"
     },
     "short": false
   },
-  "dow": {
-    "font": "6x8",
-    "fontSize": 2,
+  "date": {
+    "font": "BrunoAce",
+    "fontSize": 1,
     "outline": 1,
     "color": "#000",
     "outlineColor": "#fff",
@@ -44,13 +44,13 @@
     "xOffset": 1,
     "yOffset": 1,
     "boxPos": {
-      "x": "0.5",
-      "y": "0.82"
+      "x": "0.341",
+      "y": "0.871"
     }
   },
-  "step": {
-    "font": "6x8",
-    "fontSize": 2,
+  "dow": {
+    "font": "BrunoAce",
+    "fontSize": 1,
     "outline": 1,
     "color": "#000",
     "outlineColor": "#fff",
@@ -60,13 +60,13 @@
     "xOffset": 1,
     "yOffset": 1,
     "boxPos": {
-      "x": "0.5",
-      "y": "0.71"
+      "x": "0.414",
+      "y": "0.738"
     },
-    "prefix": "Steps: "
+    "short": false
   },
   "batt": {
-    "font": "4x6",
+    "font": "6x8",
     "fontSize": 2,
     "outline": 1,
     "color": "#0ff",
@@ -77,8 +77,8 @@
     "xOffset": 1,
     "yOffset": 1,
     "boxPos": {
-      "x": "0.87",
-      "y": "0.87"
+      "x": "0.870",
+      "y": "0.870"
     },
     "suffix": "%"
   },
