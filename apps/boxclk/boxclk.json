@@ -1,16 +1,19 @@
 {
   "time": {
     "font": "BrunoAce",
-    "fontSize": 1,
+    "fontSize": 2,
     "outline": 2,
     "color": "#000",
     "outlineColor": "#fff",
-    "border": "#000",
-    "xPadding": 0,
-    "yPadding": -4,
+    "border": "#0f0",
+    "xPadding": 0.5,
+    "yPadding": -5.5,
     "xOffset": 0,
-    "yOffset": 3,
-    "boxPos": { "x": 0.633, "y": 0.16 }
+    "yOffset": 4,
+    "boxPos": {
+      "x": "0.593",
+      "y": "0.160"
+    }
   },
   "dow": {
     "font": "6x8",
@@ -18,43 +21,53 @@
     "outline": 1,
     "color": "#000",
     "outlineColor": "#fff",
-    "border": "#000",
+    "border": "#0f0",
     "xPadding": -0.5,
     "yPadding": 0.5,
     "xOffset": 1,
     "yOffset": 1,
-    "boxPos": { "x": 0.633, "y": 0.3 },
+    "boxPos": {
+      "x": "0.605",
+      "y": "0.339"
+    },
     "short": false
   },
   "date": {
     "font": "6x8",
-    "fontSize": 1,
+    "fontSize": 2,
     "outline": 1,
     "color": "#000",
     "outlineColor": "#fff",
-    "border": "#000",
+    "border": "#0f0",
     "xPadding": 0,
     "yPadding": 0.5,
     "xOffset": 1,
     "yOffset": 1,
-    "boxPos": { "x": 0.633, "y": 0.39 },
-    "short": false
+    "boxPos": {
+      "x": "0.605",
+      "y": "0.453"
+    },
+    "short": true
   },
   "batt": {
-    "font": "4x6",
+    "font": "6x8",
     "fontSize": 2,
     "outline": 1,
     "color": "#0ff",
     "outlineColor": "#000",
-    "border": "#fff",
+    "border": "#0f0",
     "xPadding": -0.5,
     "yPadding": -0.5,
     "xOffset": 1,
     "yOffset": 1,
-    "boxPos": { "x": 0.9, "y": 0.95 },
+    "boxPos": {
+      "x": "0.900",
+      "y": "0.950"
+    },
     "suffix": "%"
   },
   "bg": {
     "img": "boxclk.beachhouse.img"
-  }
+  },
+  "selectedConfig": 0
 }
