@@ -43,17 +43,27 @@
     if (boxesConfig.bg && boxesConfig.bg.img) {
       // Use the require("Storage").read function to load the image
       let bgImage = require("Storage").read(boxesConfig.bg.img);
-
+  
       if (bgImage) {
         // Create the buffer with the dimensions of the screen
         bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8 /* Bits per pixel for color */);
-
+  
         // Draw the image to the buffer
         bgBuffer.drawImage(bgImage, 0, 0);
         hasBgBuffer = true;
+      } else {
+        // Create a blank buffer if the background image is not found
+        bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8);
+        bgBuffer.clear(); // This ensures the buffer is blank (filled with the background color)
+        hasBgBuffer = true;
       }
+    } else {
+      // Create a blank buffer if there is no background configuration
+      bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8);
+      bgBuffer.clear(); // This ensures the buffer is blank (filled with the background color)
+      hasBgBuffer = true;
     }
-  };
+  };  
 
   /**
   * ---------------------------------------------------------------
