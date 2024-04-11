@@ -63,7 +63,6 @@
 
   let touchHandler;
   let dragHandler;
-  let movementDistance = 0;
 
   /**
   * ---------------------------------------------------------------
@@ -363,7 +362,6 @@
       doubleTapTimer = setTimeout(() => {
         doubleTapTimer = null;
       }, 500); // Increase or decrease this value based on the desired double tap timing
-      movementDistance = 0;
     };
 
     // ------------------------------------
@@ -372,30 +370,25 @@
     dragHandler = function(e) {
       // Check if any box is being dragged
       if (!Object.values(isDragging).some(Boolean)) return;
-      // Calculate the movement distance
-      movementDistance += Math.abs(e.dx) + Math.abs(e.dy);
-      // Check if the movement distance exceeds a threshold
-      if (movementDistance > 1) {
-        boxKeys.forEach((boxKey) => {
-          if (isDragging[boxKey]) {
-            widgets.hide();
-            let boxItem = boxes[boxKey];
-            calcBoxSize(boxItem);
-            let newX = boxPos[boxKey].x + e.dx;
-            let newY = boxPos[boxKey].y + e.dy;
-            if (newX - totalWidth / 2 >= 0 &&
-                newX + totalWidth / 2 <= w &&
-                newY - totalHeight / 2 >= 0 &&
-                newY + totalHeight / 2 <= h ) {
-              boxPos[boxKey].x = newX;
-              boxPos[boxKey].y = newY;
-            }
-            const pos = calcBoxPos(boxKey);
-            g.clearRect(pos.x1, pos.y1, pos.x2, pos.y2);
+      boxKeys.forEach((boxKey) => {
+        if (isDragging[boxKey]) {
+          widgets.hide();
+          let boxItem = boxes[boxKey];
+          calcBoxSize(boxItem);
+          let newX = boxPos[boxKey].x + e.dx;
+          let newY = boxPos[boxKey].y + e.dy;
+          if (newX - totalWidth / 2 >= 0 &&
+              newX + totalWidth / 2 <= w &&
+              newY - totalHeight / 2 >= 0 &&
+              newY + totalHeight / 2 <= h ) {
+            boxPos[boxKey].x = newX;
+            boxPos[boxKey].y = newY;
           }
-        });
-        draw(boxes);
-      }
+          const pos = calcBoxPos(boxKey);
+          g.clearRect(pos.x1, pos.y1, pos.x2, pos.y2);
+        }
+      });
+      draw(boxes);
     };
 
     Bangle.on('touch', touchHandler);
