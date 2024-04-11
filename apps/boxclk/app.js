@@ -39,31 +39,26 @@
   let drawTimeout;
 
   const createBgBuffer = () => {
+    let bgImage;
     // Check if the 'bg' key exists in boxesConfig and it has a valid 'img' property
     if (boxesConfig.bg && boxesConfig.bg.img) {
-      // Use the require("Storage").read function to load the image
-      let bgImage = require("Storage").read(boxesConfig.bg.img);
-  
-      if (bgImage) {
-        // Create the buffer with the dimensions of the screen
-        bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8 /* Bits per pixel for color */);
-  
-        // Draw the image to the buffer
-        bgBuffer.drawImage(bgImage, 0, 0);
-        hasBgBuffer = true;
-      } else {
-        // Create a blank buffer if the background image is not found
-        bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8);
-        bgBuffer.clear(); // This ensures the buffer is blank (filled with the background color)
-        hasBgBuffer = true;
-      }
-    } else {
-      // Create a blank buffer if there is no background configuration
-      bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8);
-      bgBuffer.clear(); // This ensures the buffer is blank (filled with the background color)
-      hasBgBuffer = true;
+      // Load the image using the require("Storage").read function
+      bgImage = require("Storage").read(boxesConfig.bg.img);
     }
-  };  
+  
+    // Create the buffer with the dimensions of the screen
+    bgBuffer = Graphics.createArrayBuffer(g.getWidth(), g.getHeight(), 8);
+  
+    if (bgImage) {
+      // Draw the image to the buffer if it exists
+      bgBuffer.drawImage(bgImage, 0, 0);
+    } else {
+      // Clear the buffer to ensure it is blank if the background image is not found or there is no configuration
+      bgBuffer.clear();
+    }
+  
+    hasBgBuffer = true;
+  };    
 
   /**
   * ---------------------------------------------------------------
