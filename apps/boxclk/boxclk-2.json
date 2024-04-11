@@ -1,87 +1,73 @@
 {
   "time": {
-    "font": "6x8",
-    "fontSize": 5,
+    "font": "BrunoAce",
+    "fontSize": 2,
     "outline": 3,
-    "color": "bgH",
-    "outlineColor": "fg",
-    "border": "#f0f",
-    "xPadding": -2,
-    "yPadding": -4.5,
-    "xOffset": 3,
-    "yOffset": 0,
+    "color": "#000",
+    "outlineColor": "#0ff",
+    "border": "#0f0",
+    "xPadding": 0.5,
+    "yPadding": -5.5,
+    "xOffset": 1,
+    "yOffset": 4,
     "boxPos": {
-      "x": "0.5",
-      "y": "0.33"
+      "x": "0.492",
+      "y": "0.847"
     }
   },
   "dow": {
-    "font": "6x8",
-    "fontSize": 3,
-    "outline": 1,
-    "color": "#5ccd73",
-    "outlineColor": "fg",
-    "border": "#f0f",
-    "xPadding": -1,
+    "font": "BrunoAce",
+    "fontSize": 1,
+    "outline": 2,
+    "color": "#000",
+    "outlineColor": "#0ff",
+    "border": "#0f0",
+    "xPadding": 0,
     "yPadding": 0.5,
-    "xOffset": 2,
+    "xOffset": 0,
     "yOffset": 0,
     "boxPos": {
-      "x": "0.5",
-      "y": "0.57"
+      "x": "0.201",
+      "y": "0.119"
     },
-    "short": false
+    "short": true
   },
   "date": {
-    "font": "6x8",
-    "fontSize": 2,
-    "outline": 1,
-    "color": "#5ccd73",
-    "outlineColor": "fg",
-    "border": "#f0f",
+    "font": "BrunoAce",
+    "fontSize": 1,
+    "outline": 2,
+    "color": "#000",
+    "outlineColor": "#0ff",
+    "border": "#0f0",
     "xPadding": -0.5,
     "yPadding": 0.5,
-    "xOffset": 1,
-    "yOffset": 0,
-    "boxPos": {
-      "x": "0.5",
-      "y": "0.75"
-    },
-    "shortMonth": false,
-    "disableSuffix": true
-  },
-  "step": {
-    "font": "4x6",
-    "fontSize": 3,
-    "outline": 2,
-    "color": "bgH",
-    "outlineColor": "fg",
-    "border": "#f0f",
-    "xPadding": -1,
-    "yPadding": 0.5,
-    "xOffset": 2,
+    "xOffset": 0,
     "yOffset": 1,
     "boxPos": {
-      "x": "0.5",
-      "y": "0.92"
+      "x": "0.349",
+      "y": "0.266"
     },
-    "prefix": "Steps: "
+    "short": true,
+    "shortMonth": true
   },
   "batt": {
-    "font": "4x6",
-    "fontSize": 3,
+    "font": "6x8",
+    "fontSize": 2,
     "outline": 2,
-    "color": "bgH",
-    "outlineColor": "fg",
-    "border": "#f0f",
-    "xPadding": -1,
-    "yPadding": -1,
-    "xOffset": 2,
-    "yOffset": 2,
+    "color": "#0ff",
+    "outlineColor": "#000",
+    "border": "#0f0",
+    "xPadding": -0.5,
+    "yPadding": -0.5,
+    "xOffset": 1,
+    "yOffset": 1,
     "boxPos": {
-      "x": "0.85",
-      "y": "0.08"
+      "x": "0.866",
+      "y": "0.336"
     },
     "suffix": "%"
+  },
+  "bg": {
+    "img": "boxclk.skull.img"
   }
 }

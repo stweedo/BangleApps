@@ -101,9 +101,10 @@ __Space Theme:__
 - **Config:** [boxclk-1.json](https://github.com/espruino/BangleApps/tree/master/apps/boxclk/boxclk-1.json)
 - **Background:** [boxclk.space.img](https://github.com/espruino/BangleApps/tree/master/apps/boxclk/boxclk.space.img) ([Original Source](https://www.pixilart.com/art/fallin-from-outer-space-sr2e0c1a705749a))
 
-__System Color Theme:__
+__Skull Theme:__
 
 - **Config:** [boxclk-2.json](https://github.com/espruino/BangleApps/tree/master/apps/boxclk/boxclk-2.json)
+- **Background:** [boxclk.skull.img](https://github.com/espruino/BangleApps/tree/master/apps/boxclk/boxclk.skull.img)
 
 ## Compatibility
 
