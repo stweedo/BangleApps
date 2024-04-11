@@ -366,7 +366,7 @@
       }
       doubleTapTimer = setTimeout(() => {
         doubleTapTimer = null;
-      }, 500); // Increase or decrease this value based on the desired double tap timing
+      }, 300); // Increase or decrease this value based on the desired double tap timing
     };
 
     // ------------------------------------
