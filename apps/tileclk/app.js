@@ -12,50 +12,44 @@
         '9': ["111", "101", "111", "001", "111"]
     };
 
-    let scale = 12;
-    let secondsScale = 6;
-    let screenWidth = g.getWidth();
-    let screenHeight = g.getHeight();
+    const scale = 12, secondsScale = 6;
+    const screenWidth = g.getWidth(), screenHeight = g.getHeight();
+    const colorInterpolationLookup = {};
+    let isDrawing = true, isColonDrawn = false;
+    const appSettings = require('Storage').readJSON("tileclk.json", true) || { widgets: "show", seconds: "hide" };
+    const widgetMode = appSettings.widgets, showSeconds = appSettings.seconds === "show";
+    const enable12Hour = (require('Storage').readJSON("setting.json", true) || {})['12hour'] || false;
 
-    let colorInterpolationLookup = {};
-    let isDrawing = true;
-    let isColonDrawn = false;
-
-    let appSettings = require('Storage').readJSON("tileclk.json", true) || {
-        widgets: "show",
-        seconds: "hide"
+    // UI positions
+    const yOffset = widgetMode === "hide" || widgetMode === "swipe" ? -12 : 0;
+    const positions = {
+        colonX: 0.47 * screenWidth,
+        colonY: 0.35 * screenHeight + yOffset,
+        digitXPositions: [0.02 * screenWidth, 0.245 * screenWidth, 0.555 * screenWidth, 0.78 * screenWidth],
+        digitsY: 0.41 * screenHeight + yOffset,
+        secondsX: 0.75 * screenWidth,
+        secondsY: 0.8 * screenHeight + yOffset
     };
 
-    let widgetMode = appSettings.widgets;
-    let showSeconds = appSettings.seconds === "show";
-
-    let is12Hour = require('Storage').readJSON("setting.json", true) || {};
-    let enable12Hour = is12Hour['12hour'] || false;
-
-    // Configure widget display based on settings
     Bangle.loadWidgets();
-    if (widgetMode === "hide") {
-        require("widget_utils").hide();
-    } else if (widgetMode === "swipe") {
-        require("widget_utils").swipeOn();
-    }
+    if (widgetMode === "hide") require("widget_utils").hide();
+    else if (widgetMode === "swipe") require("widget_utils").swipeOn();
 
-    let drawDigit = function(x, y, s, num, prevNum, callback) {
-        let digitPattern = digits[num];
-        let prevDigitPattern = prevNum != null ? digits[prevNum] : Array(digitPattern.length).fill("000");
-        let tilesToRedraw = [];
+    function drawDigit(x, y, s, num, prevNum, callback) {
+        const digitPattern = digits[num];
+        const prevDigitPattern = prevNum ? digits[prevNum] : Array(digitPattern.length).fill("000");
+        const tilesToRedraw = [];
 
-        for (let row = 0; row < digitPattern.length; row++) {
-            for (let col = 0; col < digitPattern[row].length; col++) {
-                if (digitPattern[row][col] !== prevDigitPattern[row][col]) {
-                    tilesToRedraw.push({ x: x + col * s, y: y + row * s, state: digitPattern[row][col] === '1' });
+        digitPattern.forEach((row, rowIndex) => {
+            row.split('').forEach((digit, colIndex) => {
+                if (digit !== prevDigitPattern[rowIndex][colIndex]) {
+                    tilesToRedraw.push({ x: x + colIndex * s, y: y + rowIndex * s, state: digit === '1' });
                 }
-            }
-        }
+            });
+        });
 
-        let updateTiles = function() {
+        (function updateTiles() {
             if (!isDrawing) return;
-
             if (tilesToRedraw.length > 0) {
                 let tile = tilesToRedraw.shift();
                 if (tile.state) {
@@ -63,137 +57,94 @@
                 } else {
                     clearTile(tile.x, tile.y, s);
                 }
-                setTimeout(updateTiles, 50);
-            } else if (callback) {
-                callback();
-            }
-        };
+                setTimeout(updateTiles, 25);
+            } else if (callback) callback();
+        })();
+    }
 
-        updateTiles();
-    };
-
-    let preComputeIntermediateColors = function(color1, color2) {
-        var key = color1 + "_" + color2;
-        if (colorInterpolationLookup.hasOwnProperty(key)) {
-            return;
-        }
-
-        var r1 = (color1 >> 16) & 0xFF;
-        var g1 = (color1 >> 8) & 0xFF;
-        var b1 = color1 & 0xFF;
-
-        var r2 = (color2 >> 16) & 0xFF;
-        var g2 = (color2 >> 8) & 0xFF;
-        var b2 = color2 & 0xFF;
-
-        var colorArray = [];
-        for (var step = 0; step <= 10; step++) {
-            var fraction = step / 10;
-            var r = Math.round(r1 + (r2 - r1) * fraction);
-            var g = Math.round(g1 + (g2 - g1) * fraction);
-            var b = Math.round(b1 + (b2 - b1) * fraction);
-
-            colorArray.push((r << 16) | (g << 8) | b);
-        }
-
-        colorInterpolationLookup[key] = colorArray;
-    };
-
-    let interpolateColor = function(color1, color2, fraction) {
-        var key = color1 + "_" + color2;
+    function interpolateColor(color1, color2, fraction) {
+        var key = `${color1}_${color2}`;
         if (!colorInterpolationLookup[key]) {
             preComputeIntermediateColors(color1, color2);
         }
-
-        var index = Math.min(Math.max(Math.round(fraction * 10), 0), 10);
+        var index = Math.round(fraction * 5);
         return colorInterpolationLookup[key][index];
-    };
+    }
 
-    let clearTile = function(x, y, s) {
+    function preComputeIntermediateColors(color1, color2) {
+        var key = `${color1}_${color2}`;
+        if (colorInterpolationLookup.hasOwnProperty(key)) return;
+
+        var r1 = (color1 >> 16) & 0xFF, g1 = (color1 >> 8) & 0xFF, b1 = color1 & 0xFF;
+        var r2 = (color2 >> 16) & 0xFF, g2 = (color2 >> 8) & 0xFF, b2 = color2 & 0xFF;
+        var colorArray = [];
+
+        for (var step = 0; step <= 5; step++) {
+            let fraction = step / 5;
+            let r = Math.round(r1 + (r2 - r1) * fraction);
+            let g = Math.round(g1 + (g2 - g1) * fraction);
+            let b = Math.round(b1 + (b2 - b1) * fraction);
+            colorArray.push((r << 16) | (g << 8) | b);
+        }
+        colorInterpolationLookup[key] = colorArray;
+    }
+
+    function clearTile(x, y, s) {
         g.setColor(g.theme.bg);
         g.fillRect(x, y, x + s - 1, y + s - 1);
-    };
+    }
 
-    let animateTransition = function(x, y, s, turningOn) {
-        let progress = 0;
-        let transitionDirection = turningOn ? 1 : -1;
+    function animateTransition(x, y, s, turningOn, callback) {
+        let progress = turningOn ? 0 : 1;
 
-        let transition = function() {
+        (function transition() {
             if (!isDrawing) return;
 
-            let color = interpolateColor(g.theme.bg, g.theme.fg, progress);
+            const color = interpolateColor(g.theme.bg, g.theme.fg, progress);
             g.setColor(color);
             g.fillRect(x, y, x + s - 1, y + s - 1);
 
-            progress += 0.2 * transitionDirection;
+            progress += turningOn ? 0.2 : -0.2;
             if (0 <= progress && progress <= 1) {
                 setTimeout(transition, 25);
-            }
-        };
+            } else if (callback) callback();
+        })();
+    }
 
-        transition();
-    };
-
-    let drawColon = function(x, y, callback) {
+    function drawColon(x, y, callback) {
         if (!isDrawing || isColonDrawn) return;
 
-        g.fillRect(x, y + scale * 2, x + scale - 1, y + 3 * scale - 1);
-        g.fillRect(x, y + scale * 4, x + scale - 1, y + 5 * scale - 1);
-        isColonDrawn = true;
-
-        if (callback) callback();
-    };
-
-    let sequenceTasks = function(tasks) {
-        let result = Promise.resolve();
-        tasks.forEach(function(task) {
-            result = result.then(function() {
-                return new Promise(task);
+        animateTransition(x, y + scale * 2, scale, true, () => {
+            animateTransition(x, y + scale * 4, scale, true, () => {
+                isColonDrawn = true;
+                if (callback) callback();
             });
         });
-        return result;
-    };
+    }
 
     let lastTime = "";
     let drawTimeout;
 
-    let queueDraw = function() {
+    function queueDraw() {
         if (drawTimeout) clearTimeout(drawTimeout);
 
         let now = new Date();
-        // Calculate the milliseconds until the next second
         let millisecondsToNextSecond = 1000 - now.getMilliseconds();
-
-        drawTimeout = setTimeout(function() {
+        drawTimeout = setTimeout(() => {
             drawTimeout = undefined;
             updateAndAnimateTime();
         }, millisecondsToNextSecond);
-    };
+    }
 
-    let updateAndAnimateTime = function() {
+    function updateAndAnimateTime() {
         if (!isDrawing) return;
 
-        let now = new Date();
-        let hours = now.getHours();
-        if (enable12Hour) {
-            hours = hours % 12 || 12;
-        }
-        hours = ("0" + hours).substr(-2);
-        let minutes = ("0" + now.getMinutes()).substr(-2);
-        let seconds = ("0" + now.getSeconds()).substr(-2);
-
-        let currentTime = hours + minutes + (showSeconds ? seconds : "");
-
-        let yOffset = (widgetMode === "hide" || widgetMode === "swipe") ? -12 : 0;
-        let colonX = 0.47 * screenWidth;
-        let colonY = 0.35 * screenHeight + yOffset;
-        let digit1X = 0.02 * screenWidth;
-        let digit2X = 0.245 * screenWidth;
-        let digit3X = 0.555 * screenWidth;
-        let digit4X = 0.78 * screenWidth;
-        let digitsY = 0.41 * screenHeight + yOffset;
-        let secondsX = 0.75 * screenWidth;
-        let secondsY = 0.8 * screenHeight + yOffset;
+        var now = new Date();
+        var hours = now.getHours();
+        hours = (enable12Hour ? hours % 12 || 12 : hours).toString().padStart(2, '0');
+        var minutes = now.getMinutes().toString().padStart(2, '0');
+        var seconds = now.getSeconds().toString().padStart(2, '0');
+        var currentTime = hours + minutes + (showSeconds ? seconds : "");
 
         function finishDrawing() {
             g.flip();
@@ -201,43 +152,38 @@
             queueDraw();
         }
 
-        function continueDrawing() {
-            drawDigit(digit3X, digitsY, scale, minutes[0], lastTime[2], function() {
-                drawDigit(digit4X, digitsY, scale, minutes[1], lastTime[3], function() {
-                    if (showSeconds) {
-                        drawDigit(secondsX, secondsY, secondsScale, seconds[0], lastTime[4], function() {
-                            drawDigit(secondsX + 4 * secondsScale, secondsY, secondsScale, seconds[1], lastTime[5], function() {
-                                finishDrawing();
-                            });
-                        });
-                    } else {
-                        finishDrawing();
-                    }
-                });
+        function drawTimeSegment(positions, y, scale, timeSegment, lastSegment, callback) {
+            drawDigit(positions[0], y, scale, timeSegment[0], lastSegment[0], () => {
+                drawDigit(positions[1], y, scale, timeSegment[1], lastSegment[1], callback);
             });
         }
 
-        drawDigit(digit1X, digitsY, scale, hours[0], lastTime[0], function() {
-            drawDigit(digit2X, digitsY, scale, hours[1], lastTime[1], function() {
-                if (!isColonDrawn) {
-                    drawColon(colonX, colonY, function() {
-                        continueDrawing();
-                    });
+        function continueDrawing() {
+            drawTimeSegment(positions.digitXPositions.slice(2, 4), positions.digitsY, scale, minutes, lastTime.slice(2, 4), () => {
+                if (showSeconds) {
+                    drawTimeSegment([positions.secondsX, positions.secondsX + 4 * secondsScale], positions.secondsY, secondsScale, seconds, lastTime.slice(4, 6), finishDrawing);
                 } else {
-                    continueDrawing();
+                    finishDrawing();
                 }
             });
-        });
-    };
+        }
 
-    let drawTime = function() {
+        drawTimeSegment(positions.digitXPositions.slice(0, 2), positions.digitsY, scale, hours, lastTime.slice(0, 2), () => {
+            if (!isColonDrawn) {
+                drawColon(positions.colonX, positions.colonY, continueDrawing);
+            } else {
+                continueDrawing();
+            }
+        });
+    }
+
+    function drawTime() {
         g.clear(Bangle.appRect);
-        // Update to draw widgets based on settings
         if (widgetMode !== "hide") {
             Bangle.drawWidgets();
         }
         updateAndAnimateTime();
-    };
+    }
 
     Bangle.setUI({
         mode: "clock",
