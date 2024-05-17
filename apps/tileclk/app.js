@@ -26,8 +26,6 @@
   const showSeconds = settings.seconds === "show";
   const is12Hour = (require('Storage').readJSON("setting.json", true) || {})['12hour'] || false;
 
-  const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
-
   const digitWidth = 3 * SCALE;
   const digitHeight = 5 * SCALE;
   const colonWidth = SCALE;
@@ -41,32 +39,39 @@
     const startX = (screenWidth - totalWidth) / 2;
 
     return {
-      colonX: isThreeDigit ? startX + digitWidth + GAP : startX + 2 * (digitWidth + GAP),
-      colonY: 0.35 * screenHeight + yOffset,
+      colonX: Math.round(isThreeDigit ? startX + digitWidth + GAP : startX + 2 * (digitWidth + GAP)),
+      colonY: Math.round(0.35 * screenHeight),
       digitX: isThreeDigit ? [
-        startX,
-        startX + digitWidth + GAP + colonWidth + GAP,
-        startX + 2 * (digitWidth + GAP) + colonWidth + GAP
+        Math.round(startX),
+        Math.round(startX + digitWidth + GAP + colonWidth + GAP),
+        Math.round(startX + 2 * (digitWidth + GAP) + colonWidth + GAP)
       ] : [
-        startX,
-        startX + digitWidth + GAP,
-        startX + 2 * (digitWidth + GAP) + colonWidth + GAP,
-        startX + 3 * (digitWidth + GAP) + colonWidth + GAP
+        Math.round(startX),
+        Math.round(startX + digitWidth + GAP),
+        Math.round(startX + 2 * (digitWidth + GAP) + colonWidth + GAP),
+        Math.round(startX + 3 * (digitWidth + GAP) + colonWidth + GAP)
       ],
-      digitsY: 0.41 * screenHeight + yOffset,
-      secondsX: [secondsStartX, secondsStartX + secondsDigitWidth + GAP],
-      secondsY: 0.8 * screenHeight + yOffset
+      digitsY: Math.round(0.41 * screenHeight)
     };
   }
 
   let positions = settings.positions || {};
   if (!positions.threeDigit || !positions.fourDigit) {
-    if (!positions.threeDigit) {
+    if (!positions.threeDigit && is12Hour) {
       positions.threeDigit = calculatePositions(true);
     }
+
     if (!positions.fourDigit) {
       positions.fourDigit = calculatePositions(false);
     }
+
+    settings.positions = positions;
+    require('Storage').writeJSON("tileclk.json", settings);
+  }
+
+  if (!positions.secondsX || !positions.secondsY) {
+    positions.secondsX = [Math.round(secondsStartX), Math.round(secondsStartX + secondsDigitWidth + GAP)];
+    positions.secondsY = Math.round(0.8 * screenHeight);
     settings.positions = positions;
     require('Storage').writeJSON("tileclk.json", settings);
   }
@@ -186,23 +191,24 @@
       const pos = isThreeDigit ? positions.threeDigit : positions.fourDigit;
       const colonPosX = pos.colonX;
       const digitPosX = pos.digitX;
+      const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
 
       if (isThreeDigit) {
-        drawDigit(digitPosX[0], pos.digitsY, SCALE, hours[1], lastTime[1], () => {
+        drawDigit(digitPosX[0], pos.digitsY + yOffset, SCALE, hours[1], lastTime[1], () => {
           if (!isColonDrawn) {
-            drawColon(colonPosX, pos.colonY, () => {
-              drawSegment(digitPosX.slice(1, 3), pos.digitsY, SCALE, minutes, lastTime.slice(2, 4), () => {
+            drawColon(colonPosX, pos.colonY + yOffset, () => {
+              drawSegment(digitPosX.slice(1, 3), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), () => {
                 if (showSeconds) {
-                  drawSegment(pos.secondsX, pos.secondsY, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
+                  drawSegment(positions.secondsX, positions.secondsY + yOffset, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
                 } else {
                   finishDrawing();
                 }
               });
             });
           } else {
-            drawSegment(digitPosX.slice(1, 3), pos.digitsY, SCALE, minutes, lastTime.slice(2, 4), () => {
+            drawSegment(digitPosX.slice(1, 3), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), () => {
               if (showSeconds) {
-                drawSegment(pos.secondsX, pos.secondsY, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
+                drawSegment(positions.secondsX, positions.secondsY + yOffset, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
               } else {
                 finishDrawing();
               }
@@ -210,21 +216,21 @@
           }
         });
       } else {
-        drawSegment(digitPosX.slice(0, 2), pos.digitsY, SCALE, hours, lastTime.slice(0, 2), () => {
+        drawSegment(digitPosX.slice(0, 2), pos.digitsY + yOffset, SCALE, hours, lastTime.slice(0, 2), () => {
           if (!isColonDrawn) {
-            drawColon(pos.colonX, pos.colonY, () => {
-              drawSegment(digitPosX.slice(2, 4), pos.digitsY, SCALE, minutes, lastTime.slice(2, 4), () => {
+            drawColon(pos.colonX, pos.colonY + yOffset, () => {
+              drawSegment(digitPosX.slice(2, 4), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), () => {
                 if (showSeconds) {
-                  drawSegment(pos.secondsX, pos.secondsY, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
+                  drawSegment(positions.secondsX, positions.secondsY + yOffset, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
                 } else {
                   finishDrawing();
                 }
               });
             });
           } else {
-            drawSegment(digitPosX.slice(2, 4), pos.digitsY, SCALE, minutes, lastTime.slice(2, 4), () => {
+            drawSegment(digitPosX.slice(2, 4), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), () => {
               if (showSeconds) {
-                drawSegment(pos.secondsX, pos.secondsY, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
+                drawSegment(positions.secondsX, positions.secondsY + yOffset, SECONDS_SCALE, seconds, lastTime.slice(4, 6), finishDrawing);
               } else {
                 finishDrawing();
               }
