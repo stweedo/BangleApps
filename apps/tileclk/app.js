@@ -271,10 +271,6 @@
     updateAndAnimTime();
   }
 
-  Bangle.loadWidgets();
-  if (settings.widgets === "hide") require("widget_utils").hide();
-  else if (settings.widgets === "swipe") require("widget_utils").swipe();
-
   Bangle.setUI({
     mode: "clock",
     remove: () => {
@@ -282,6 +278,10 @@
       isDrawing = false;
     }
   });
+
+  Bangle.loadWidgets();
+  if (settings.widgets === "hide") require("widget_utils").hide();
+  else if (settings.widgets === "swipe") require("widget_utils").swipe();
 
   Bangle.on('lock', (isLocked) => {
     if (settings.seconds === "dynamic") {
