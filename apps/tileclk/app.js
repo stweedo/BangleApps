@@ -18,7 +18,7 @@
     '9': ["111", "101", "111", "001", "111"]
   };
 
-  const digitWidth = 3 * SCALE, digitHeight = 5 * SCALE, colonWidth = SCALE, secDigitWidth = 3 * SEC_SCALE;
+  const digitWidth = 3 * SCALE, colonWidth = SCALE, secDigitWidth = 3 * SEC_SCALE;
   const totalSecWidth = 2 * secDigitWidth + GAP, secStartX = (width / 2) - (totalSecWidth / 2);
 
   function calcPositions(isThreeDigit) {
