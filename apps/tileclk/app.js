@@ -36,7 +36,6 @@
   function calcPositions(isThreeDigit) {
     const totalWidth = isThreeDigit ? 3 * digitWidth + colonWidth + 3 * GAP : 4 * digitWidth + colonWidth + 4 * GAP;
     const startX = (width - totalWidth) / 2;
-
     return {
       colonX: Math.round(isThreeDigit ? startX + digitWidth + GAP : startX + 2 * (digitWidth + GAP)),
       colonY: Math.round(0.35 * height),
@@ -56,12 +55,8 @@
 
   let positions = settings.positions || {};
   if (!positions.threeDigit || !positions.fourDigit) {
-    if (!positions.threeDigit && is12Hour) {
-      positions.threeDigit = calcPositions(true);
-    }
-    if (!positions.fourDigit) {
-      positions.fourDigit = calcPositions(false);
-    }
+    positions.threeDigit = is12Hour ? calcPositions(true) : positions.threeDigit;
+    positions.fourDigit = calcPositions(false);
     settings.positions = positions;
     require('Storage').writeJSON("tileclk.json", settings);
   }
@@ -85,30 +80,19 @@
     const key = `${c1}_${c2}`;
     if (colorLookup[key]) return;
 
-    const r1 = (c1 >> 16) & 0xFF,
-      g1 = (c1 >> 8) & 0xFF,
-      b1 = c1 & 0xFF;
-    const r2 = (c2 >> 16) & 0xFF,
-      g2 = (c2 >> 8) & 0xFF,
-      b2 = c2 & 0xFF;
-    const colors = [];
-
-    for (let i = 0; i <= FRAC_STEPS; i++) {
+    colorLookup[key] = Array.from({length: FRAC_STEPS + 1}, (_, i) => {
       const f = i / FRAC_STEPS;
-      colors.push(((r1 + (r2 - r1) * f) << 16) | ((g1 + (g2 - g1) * f) << 8) | (b1 + (b2 - b1) * f));
-    }
-    colorLookup[key] = colors;
+      return ((c1 & 0xFF0000) * (1 - f) + (c2 & 0xFF0000) * f) & 0xFF0000 |
+             ((c1 & 0x00FF00) * (1 - f) + (c2 & 0x00FF00) * f) & 0x00FF00 |
+             ((c1 & 0x0000FF) * (1 - f) + (c2 & 0x0000FF) * f) & 0x0000FF;
+    });
+
     settings.colorLookup = colorLookup;
     require('Storage').writeJSON("tileclk.json", settings);
   }
 
   let isDrawing = true;
   let isColonDrawn = false;
-
-  function clearTile(x, y, s) {
-    g.setColor(g.theme.bg);
-    g.fillRect(x, y, x + s - 1, y + s - 1);
-  }
 
   function animateTile(x, y, s, on, callback) {
     let progress = on ? 0 : 1;
@@ -156,7 +140,8 @@
       if (tile.state) {
         animateTile(tile.x, tile.y, s, true);
       } else {
-        clearTile(tile.x, tile.y, s);
+        g.setColor(g.theme.bg);
+        g.fillRect(tile.x, tile.y, tile.x + s - 1, tile.y + s - 1);
       }
       setTimeout(updateTiles, ANIM_DELAY);
     }
@@ -169,8 +154,8 @@
       if (callback) callback();
       return;
     }
-    animateTile(x, y + SCALE * 2, SCALE, true, function() {
-      animateTile(x, y + SCALE * 4, SCALE, true, function() {
+    animateTile(x, y + SCALE * 2, SCALE, true, () => {
+      animateTile(x, y + SCALE * 4, SCALE, true, () => {
         isColonDrawn = true;
         if (callback) callback();
       });
@@ -183,8 +168,7 @@
 
   function queueDraw() {
     if (drawTimeout) clearTimeout(drawTimeout);
-    const now = new Date();
-    drawTimeout = setTimeout(updateAndAnimTime, 1000 - now.getMilliseconds());
+    drawTimeout = setTimeout(updateAndAnimTime, 1000 - new Date().getMilliseconds());
   }
 
   function updateAndAnimTime() {
@@ -196,8 +180,7 @@
     let seconds = now.getSeconds().toString().padStart(2, '0');
 
     if (isFirstDraw && showSeconds) {
-      const nextSecond = (parseInt(seconds) + 1) % 60;
-      seconds = nextSecond.toString().padStart(2, '0');
+      seconds = ((parseInt(seconds) + 1) % 60).toString().padStart(2, '0');
       isFirstDraw = false;
     }
 
@@ -209,37 +192,31 @@
       });
     }
 
+    function drawTime() {
+      const isThreeDigit = is12Hour && hours[0] === '0';
+      const pos = isThreeDigit ? positions.threeDigit : positions.fourDigit;
+      const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
+
+      const drawFunction = isThreeDigit ?
+        () => drawDigit(pos.digitX[0], pos.digitsY + yOffset, SCALE, hours[1], lastTime[1], () => {
+          drawColon(pos.colonX, pos.colonY + yOffset, () => {
+            drawSegment(pos.digitX.slice(1, 3), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), finishDrawing);
+          });
+        }) :
+        () => drawSegment(pos.digitX.slice(0, 2), pos.digitsY + yOffset, SCALE, hours, lastTime.slice(0, 2), () => {
+          drawColon(pos.colonX, pos.colonY + yOffset, () => {
+            drawSegment(pos.digitX.slice(2, 4), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), finishDrawing);
+          });
+        });
+
+      drawFunction();
+    }
+
     function finishDrawing() {
       g.flip();
       lastTime = currentTime.slice(0, 4);
       if (showSeconds) updateSeconds(seconds);
       queueDraw();
-    }
-
-    function drawTime() {
-      const isThreeDigit = is12Hour && hours[0] === '0';
-      const pos = isThreeDigit ? positions.threeDigit : positions.fourDigit;
-      if (!pos) {
-        console.log("Error: positions not properly initialized");
-        return;
-      }
-      const colonPosX = pos.colonX;
-      const digitPosX = pos.digitX;
-      const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
-
-      if (isThreeDigit) {
-        drawDigit(digitPosX[0], pos.digitsY + yOffset, SCALE, hours[1], lastTime[1], () => {
-          drawColon(colonPosX, pos.colonY + yOffset, () => {
-            drawSegment(digitPosX.slice(1, 3), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), finishDrawing);
-          });
-        });
-      } else {
-        drawSegment(digitPosX.slice(0, 2), pos.digitsY + yOffset, SCALE, hours, lastTime.slice(0, 2), () => {
-          drawColon(colonPosX, pos.colonY + yOffset, () => {
-            drawSegment(digitPosX.slice(2, 4), pos.digitsY + yOffset, SCALE, minutes, lastTime.slice(2, 4), finishDrawing);
-          });
-        });
-      }
     }
 
     drawTime();
@@ -250,7 +227,6 @@
 
   function updateSeconds(seconds) {
     if (isDrawingSeconds) return;
-
     isDrawingSeconds = true;
 
     function updateDigit(index) {
@@ -281,16 +257,14 @@
 
   function clearSeconds(callback) {
     if (isDrawingSeconds) {
-      setTimeout(function() {
-        clearSeconds(callback);
-      }, 50);
+      setTimeout(() => clearSeconds(callback), 50);
       return;
     }
 
     isDrawingSeconds = true;
     const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
-    drawDigit(positions.secondsX[0], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[0], function() {
-      drawDigit(positions.secondsX[1], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[1], function() {
+    drawDigit(positions.secondsX[0], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[0], () => {
+      drawDigit(positions.secondsX[1], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[1], () => {
         lastSeconds = "";
         isDrawingSeconds = false;
         if (callback) callback();
