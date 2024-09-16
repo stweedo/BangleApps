@@ -1,7 +1,16 @@
 (function() {
-  const SCALE = 12, SEC_SCALE = 6, FRAC_STEPS = 5, ANIM_DELAY = 25, COLOR_INTERP = 0.2, GAP = 3;
-  const width = g.getWidth(), height = g.getHeight();
-  const settings = require('Storage').readJSON("tileclk.json", true) || { widgets: "show", seconds: "hide" };
+  const SCALE = 12,
+    SEC_SCALE = 6,
+    FRAC_STEPS = 5,
+    ANIM_DELAY = 25,
+    COLOR_INTERP = 0.2,
+    GAP = 3;
+  const width = g.getWidth(),
+    height = g.getHeight();
+  const settings = require('Storage').readJSON("tileclk.json", true) || {
+    widgets: "show",
+    seconds: "hide"
+  };
   const is12Hour = (require('Storage').readJSON("setting.json", true) || {})['12hour'] || false;
   let showSeconds = settings.seconds === "show" || (settings.seconds === "dynamic" && !Bangle.isLocked());
 
@@ -18,8 +27,11 @@
     '9': ["111", "101", "111", "001", "111"]
   };
 
-  const digitWidth = 3 * SCALE, colonWidth = SCALE, secDigitWidth = 3 * SEC_SCALE;
-  const totalSecWidth = 2 * secDigitWidth + GAP, secStartX = (width / 2) - (totalSecWidth / 2);
+  const digitWidth = 3 * SCALE,
+    colonWidth = SCALE,
+    secDigitWidth = 3 * SEC_SCALE;
+  const totalSecWidth = 2 * secDigitWidth + GAP,
+    secStartX = (width / 2) - (totalSecWidth / 2);
 
   function calcPositions(isThreeDigit) {
     const totalWidth = isThreeDigit ? 3 * digitWidth + colonWidth + 3 * GAP : 4 * digitWidth + colonWidth + 4 * GAP;
@@ -62,6 +74,7 @@
   }
 
   let colorLookup = settings.colorLookup || {};
+
   function interpColor(c1, c2, fraction) {
     const key = `${c1}_${c2}`;
     if (!colorLookup[key]) precomputeColors(c1, c2);
@@ -72,8 +85,12 @@
     const key = `${c1}_${c2}`;
     if (colorLookup[key]) return;
 
-    const r1 = (c1 >> 16) & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = c1 & 0xFF;
-    const r2 = (c2 >> 16) & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = c2 & 0xFF;
+    const r1 = (c1 >> 16) & 0xFF,
+      g1 = (c1 >> 8) & 0xFF,
+      b1 = c1 & 0xFF;
+    const r2 = (c2 >> 16) & 0xFF,
+      g2 = (c2 >> 8) & 0xFF,
+      b2 = c2 & 0xFF;
     const colors = [];
 
     for (let i = 0; i <= FRAC_STEPS; i++) {
@@ -106,7 +123,7 @@
       if (progress >= 0 && progress <= 1) {
         setTimeout(transition, ANIM_DELAY);
       } else {
-        callback && callback();
+        if (callback) callback();
       }
     }
 
@@ -121,15 +138,26 @@
     for (let i = 0; i < 5; i++) {
       for (let j = 0; j < 3; j++) {
         if (currentPattern[i][j] !== prevPattern[i][j]) {
-          tiles.push({ x: x + j * s, y: y + i * s, state: currentPattern[i][j] === '1' });
+          tiles.push({
+            x: x + j * s,
+            y: y + i * s,
+            state: currentPattern[i][j] === '1'
+          });
         }
       }
     }
 
     function updateTiles() {
-      if (!isDrawing || !tiles.length) return callback && callback();
-      const tile = tiles.shift();
-      tile.state ? animateTile(tile.x, tile.y, s, true) : clearTile(tile.x, tile.y, s);
+      if (!isDrawing || !tiles.length) {
+        if (callback) callback();
+        return;
+      }
+      var tile = tiles.shift();
+      if (tile.state) {
+        animateTile(tile.x, tile.y, s, true);
+      } else {
+        clearTile(tile.x, tile.y, s);
+      }
       setTimeout(updateTiles, ANIM_DELAY);
     }
 
@@ -137,11 +165,14 @@
   }
 
   function drawColon(x, y, callback) {
-    if (!isDrawing || isColonDrawn) return callback && callback();
-    animateTile(x, y + SCALE * 2, SCALE, true, () => {
-      animateTile(x, y + SCALE * 4, SCALE, true, () => {
+    if (!isDrawing || isColonDrawn) {
+      if (callback) callback();
+      return;
+    }
+    animateTile(x, y + SCALE * 2, SCALE, true, function() {
+      animateTile(x, y + SCALE * 4, SCALE, true, function() {
         isColonDrawn = true;
-        callback && callback();
+        if (callback) callback();
       });
     });
   }
@@ -219,9 +250,9 @@
 
   function updateSeconds(seconds) {
     if (isDrawingSeconds) return;
-    
+
     isDrawingSeconds = true;
-    
+
     function updateDigit(index) {
       if (seconds[index] !== lastSeconds[index]) {
         drawSecondDigit(index, seconds[index], lastSeconds[index], () => {
@@ -239,7 +270,7 @@
         isDrawingSeconds = false;
       }
     }
-    
+
     updateDigit(0);
   }
 
@@ -249,15 +280,20 @@
   }
 
   function clearSeconds(callback) {
-    if (isDrawingSeconds) return setTimeout(() => clearSeconds(callback), 50);
-    
+    if (isDrawingSeconds) {
+      setTimeout(function() {
+        clearSeconds(callback);
+      }, 50);
+      return;
+    }
+
     isDrawingSeconds = true;
     const yOffset = settings.widgets === "hide" || settings.widgets === "swipe" ? -SCALE : 0;
-    drawDigit(positions.secondsX[0], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[0], () => {
-      drawDigit(positions.secondsX[1], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[1], () => {
+    drawDigit(positions.secondsX[0], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[0], function() {
+      drawDigit(positions.secondsX[1], positions.secondsY + yOffset, SEC_SCALE, " ", lastSeconds[1], function() {
         lastSeconds = "";
         isDrawingSeconds = false;
-        callback && callback();
+        if (callback) callback();
       });
     });
   }
