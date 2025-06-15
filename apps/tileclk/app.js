@@ -48,6 +48,13 @@
   // Clock info menu
   let clockInfoMenu = null;
   
+  // Event handlers (for cleanup)
+  let touchHandler = null;
+  let lockHandler = null;
+  
+  // Animation timeouts tracking
+  let animationTimeouts = [];
+  
   // ===== STATE PERSISTENCE =====
   function loadDisplayState() {
     const state = require('Storage').readJSON("tileclk.state.json", true) || {};
@@ -199,7 +206,8 @@
 
       progress += step;
       if (progress >= 0 && progress <= 1) {
-        setTimeout(transition, ANIM_DELAY);
+        const timeout = setTimeout(transition, ANIM_DELAY);
+        animationTimeouts.push(timeout);
       } else {
         if (on) drawBorder(x, y, s, thickness);
         if (callback) callback();
@@ -258,7 +266,8 @@
     }
     const tile = tiles.shift();
     updateTile(tile, s, skipAnimation, isMainDigit);
-    setTimeout(() => updateTiles(tiles, s, callback, skipAnimation, isMainDigit), ANIM_DELAY);
+    const timeout = setTimeout(() => updateTiles(tiles, s, callback, skipAnimation, isMainDigit), ANIM_DELAY);
+    animationTimeouts.push(timeout);
   }
 
   // ===== DIGIT DRAWING =====
@@ -482,7 +491,8 @@
 
   function clearSeconds(callback) {
     if (isDrawingSeconds) {
-      setTimeout(() => clearSeconds(callback), 50);
+      const timeout = setTimeout(() => clearSeconds(callback), 50);
+      animationTimeouts.push(timeout);
       return;
     }
 
@@ -496,10 +506,17 @@
     }, false, false);
   }
 
+  // ===== ANIMATION CLEANUP =====
+  function cancelAllAnimations() {
+    animationTimeouts.forEach(t => clearTimeout(t));
+    animationTimeouts = [];
+  }
+  
   // ===== SWITCHING FUNCTIONS (Optimized with direct state changes) =====
   function switchToClockInfo() {
     if (showingClockInfo || !clockInfoMenu) return;
     
+    cancelAllAnimations();
     if (secondsTimeout) clearTimeout(secondsTimeout);
     
     const show = () => {
@@ -522,6 +539,7 @@
   function hideClockInfo() {
     if (!showingClockInfo) return;
     
+    cancelAllAnimations();
     userPreferClockInfo = false;
     showingClockInfo = false;
     clockInfoUnfocused = false;
@@ -534,6 +552,7 @@
   function switchToSeconds() {
     if (!showingClockInfo || !showSeconds) return;
     
+    cancelAllAnimations();
     userPreferClockInfo = false;
     userDismissedClockInfo = true;
     showingClockInfo = false;
@@ -549,7 +568,13 @@
 
   // ===== TOUCH HANDLING (Optimized with pre-computed areas) =====
   function setupTouchHandler() {
-    Bangle.on("touch", (_, e) => {
+    // Remove old handler if exists
+    if (touchHandler) {
+      Bangle.removeListener("touch", touchHandler);
+    }
+    
+    // Create new handler
+    touchHandler = (_, e) => {
       if (showingClockInfo) {
         // Check if tap is on clock info area
         if (e.y >= secondsAreaTop && e.y <= clockInfoAreaBottom) {
@@ -600,7 +625,10 @@
           switchToClockInfo();
         }
       }
-    });
+    };
+    
+    // Add the handler
+    Bangle.on("touch", touchHandler);
   }
 
   // ===== CLOCK INFO SETUP =====
@@ -674,10 +702,6 @@
     // Load saved state
     loadDisplayState();
     
-    // Setup clock info and touch handler
-    setupClockInfo();
-    setupTouchHandler();
-    
     // Determine initial display based on saved preferences and current settings
     if (showingClockInfo && clockInfoMenu) {
       // User was viewing clock info - restore it but unfocused
@@ -719,10 +743,49 @@
       if (drawTimeout) clearTimeout(drawTimeout);
       if (secondsTimeout) clearTimeout(secondsTimeout);
       
+      // Cancel all animation timeouts
+      cancelAllAnimations();
+      
+      // Remove event handlers
+      if (touchHandler) {
+        Bangle.removeListener("touch", touchHandler);
+        touchHandler = null;
+      }
+      if (lockHandler) {
+        Bangle.removeListener("lock", lockHandler);
+        lockHandler = null;
+      }
+      
+      // Clear color cache
+      for (let k in colorCache) delete colorCache[k];
+      
       if (clockInfoMenu) {
         clockInfoMenu.remove();
         clockInfoMenu = null;
       }
+      
+      // Restore widgets if hidden
+      if (settings.widgets === "hide") {
+        require("widget_utils").show();
+      }
+      
+      // Clear all state variables
+      showingClockInfo = false;
+      clockInfoUnfocused = false;
+      userPreferClockInfo = false;
+      userDismissedClockInfo = false;
+      isDrawing = false;
+      isColonDrawn = false;
+      isDrawingSeconds = false;
+      lastTime = "";
+      lastSeconds = "";
+      
+      // Clear layout arrays
+      threeDigitLayout.length = 0;
+      fourDigitLayout.length = 0;
+      
+      // Clear position calculations
+      for (let k in positions) delete positions[k];
     }
   });
 
@@ -731,8 +794,18 @@
   if (settings.widgets === "hide") require("widget_utils").hide();
   else if (settings.widgets === "swipe") require("widget_utils").swipeOn();
 
+  // ===== SETUP (run once) =====
+  setupClockInfo();
+  setupTouchHandler();
+  
   // ===== LOCK HANDLER =====
-  Bangle.on('lock', function(isLocked) {
+  // Remove old handler if exists
+  if (lockHandler) {
+    Bangle.removeListener('lock', lockHandler);
+  }
+  
+  // Create new handler
+  lockHandler = function(isLocked) {
     if (settings.seconds === "dynamic") {
       showSeconds = !isLocked;
       if (isLocked) {
@@ -759,7 +832,10 @@
         }
       }
     }
-  });
+  };
+  
+  // Add the handler
+  Bangle.on('lock', lockHandler);
 
   // ===== START CLOCK =====
   drawClock();
