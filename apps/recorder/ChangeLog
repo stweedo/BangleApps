@@ -61,3 +61,7 @@
 0.47: Fix 'blip' on speed map on some recordings
       Ensure Battery voltage is only stored to 0.01v
       Add graphs for Steps+Battery
+0.48: Web interface improvements:
+      Add interactive maps with clickable track points showing recorded data
+      Add charts for HR, battery, steps, elevation, speed, and barometer (with PNG export)
+      Add metric/imperial unit settings with locale auto-detection
