@@ -623,7 +623,7 @@ function createLeafletMap(containerId, coordinates, fullTrack) {
     }).setView([0, 0], 13);
     
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution: 'Map data from <a href="https://www.openstreetmap.org/copyright" onclick="window.open(this.href, \'_blank\'); return false;">OpenStreetMap</a>',
       maxZoom: 19
     }).addTo(map);
     
@@ -1151,6 +1151,16 @@ ${trackData.Latitude ? `
 
 function onInit() {
   getTrackList();
+  
+  // Handle attribution links to open in new window
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'A' && 
+        (e.target.href.includes('leafletjs.com') || 
+         e.target.href.includes('openstreetmap.org'))) {
+      e.preventDefault();
+      window.open(e.target.href, '_blank');
+    }
+  }, true);
 }
 
     </script>
