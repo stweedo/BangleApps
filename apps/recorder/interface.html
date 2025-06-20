@@ -1149,60 +1149,20 @@ ${trackData.Latitude ? `
   });
 }
 
-// Handle attribution page display
-function showAttributionPage(url) {
-  // Save current content
-  const currentContent = document.getElementById('tracks').innerHTML;
-  
-  // Create iframe with back button
-  document.getElementById('tracks').innerHTML = `
-    <div style="position:fixed; top:0; left:0; right:0; padding:10px; background:#fff; border-bottom:1px solid #ccc; z-index:1000;">
-      <button class="btn btn-primary" onclick="restoreRecorderInterface()">← Back to Recorder</button>
-    </div>
-    <iframe src="${url}" style="width:100%; height:calc(100vh - 60px); border:none; margin-top:50px;"></iframe>
-  `;
-  
-  // Store content and maps for restoration
-  window.savedRecorderContent = currentContent;
-  window.savedLeafletMaps = leafletMaps;
-  window.savedTrackCharts = trackCharts;
-  leafletMaps = {};
-  trackCharts = {};
-}
-
-function restoreRecorderInterface() {
-  // Restore content
-  document.getElementById('tracks').innerHTML = window.savedRecorderContent;
-  
-  // Restore saved references
-  leafletMaps = window.savedLeafletMaps || {};
-  trackCharts = window.savedTrackCharts || {};
-  
-  // Re-initialize maps to ensure they render properly
-  setTimeout(() => {
-    Object.values(leafletMaps).forEach(map => {
-      if (map && map.invalidateSize) {
-        map.invalidateSize();
-      }
-    });
-  }, 100);
-}
-
 function onInit() {
   getTrackList();
   
-  // Handle attribution links to use iframe on mobile, new window on desktop
+  // Handle attribution links - show a simple alert
   document.addEventListener('click', function(e) {
     if (e.target.tagName === 'A' && 
         (e.target.href.includes('leafletjs.com') || 
          e.target.href.includes('openstreetmap.org'))) {
       e.preventDefault();
       
-      // Check if mobile/tablet or if window.open fails
-      if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-          !window.open(e.target.href, '_blank')) {
-        // Use iframe approach for mobile or if popup blocked
-        showAttributionPage(e.target.href);
+      if (e.target.href.includes('openstreetmap.org')) {
+        alert('Map data © OpenStreetMap contributors\nLicense: Open Database License (ODbL)\nWebsite: openstreetmap.org/copyright');
+      } else {
+        alert('Leaflet © Volodymyr Agafonkin\nLicense: BSD 2-Clause\nWebsite: leafletjs.com');
       }
     }
   }, true);
