@@ -40,6 +40,8 @@
       .chart-export { text-align: right; margin-top: 10px; }
       .chart-export button { font-size: 0.85em; padding: 4px 8px; }
       .no-data-message { text-align: center; color: #666; font-style: italic; padding: 20px; }
+      #track-selector { margin-bottom: 20px; }
+      .text-center { text-align: center; }
     </style>
   </head>
   <body>
@@ -57,6 +59,7 @@ var domTracks = document.getElementById("tracks");
 var fileCache = new Map();
 var leafletMaps = {};
 var trackCharts = {};
+var currentTrackNumber = null;
 
 // Localization and unit conversion
 function getLocalizationSettings() {
@@ -86,77 +89,41 @@ function saveLocalizationSettings(settings) {
   localStorage.setItem('recorder-units', JSON.stringify(settings));
 }
 
-function convertSpeed(speedKmh, targetUnit = null) {
-  const settings = getLocalizationSettings();
-  const unit = targetUnit || settings.speed;
-  
-  if (unit === 'mph') {
-    return {
-      value: speedKmh * 0.621371,
-      unit: 'mph',
-      label: 'Speed (mph)'
-    };
+const unitConversions = {
+  speed: {
+    metric: { unit: 'km/h', label: 'Speed (km/h)', convert: v => v },
+    imperial: { unit: 'mph', label: 'Speed (mph)', convert: v => v * 0.621371 }
+  },
+  distance: {
+    metric: { unit: 'km', label: 'km', convert: v => v },
+    imperial: { unit: 'mi', label: 'miles', convert: v => v * 0.621371 }
+  },
+  temperature: {
+    metric: { unit: '°C', label: 'Temperature (°C)', convert: v => v },
+    imperial: { unit: '°F', label: 'Temperature (°F)', convert: v => (v * 9/5) + 32 }
+  },
+  elevation: {
+    metric: { unit: 'm', label: 'Elevation (m)', convert: v => v },
+    imperial: { unit: 'ft', label: 'Elevation (ft)', convert: v => v * 3.28084 }
   }
+};
+
+function convertUnit(type, value, targetUnit = null) {
+  const settings = getLocalizationSettings();
+  const unit = targetUnit || settings[type];
+  const isImperial = (type === 'temperature' ? unit === 'fahrenheit' : unit !== settings[type] || !['kmh', 'km', 'celsius', 'm'].includes(unit));
+  const conversion = unitConversions[type][isImperial ? 'imperial' : 'metric'];
   return {
-    value: speedKmh,
-    unit: 'km/h',
-    label: 'Speed (km/h)'
+    value: conversion.convert(value),
+    unit: conversion.unit,
+    label: conversion.label
   };
 }
 
-function convertDistance(distanceKm, targetUnit = null) {
-  const settings = getLocalizationSettings();
-  const unit = targetUnit || settings.distance;
-  
-  if (unit === 'mi') {
-    return {
-      value: distanceKm * 0.621371,
-      unit: 'mi',
-      label: 'miles'
-    };
-  }
-  return {
-    value: distanceKm,
-    unit: 'km',
-    label: 'km'
-  };
-}
-
-function convertTemperature(tempCelsius, targetUnit = null) {
-  const settings = getLocalizationSettings();
-  const unit = targetUnit || settings.temperature;
-  
-  if (unit === 'fahrenheit') {
-    return {
-      value: (tempCelsius * 9/5) + 32,
-      unit: '°F',
-      label: 'Temperature (°F)'
-    };
-  }
-  return {
-    value: tempCelsius,
-    unit: '°C',
-    label: 'Temperature (°C)'
-  };
-}
-
-function convertElevation(elevationM, targetUnit = null) {
-  const settings = getLocalizationSettings();
-  const unit = targetUnit || settings.elevation;
-  
-  if (unit === 'ft') {
-    return {
-      value: elevationM * 3.28084,
-      unit: 'ft',
-      label: 'Elevation (ft)'
-    };
-  }
-  return {
-    value: elevationM,
-    unit: 'm',
-    label: 'Elevation (m)'
-  };
-}
+const convertSpeed = (v, t) => convertUnit('speed', v, t);
+const convertDistance = (v, t) => convertUnit('distance', v, t);
+const convertTemperature = (v, t) => convertUnit('temperature', v, t);
+const convertElevation = (v, t) => convertUnit('elevation', v, t);
 
 
 function createChartContainer(chartId, title, collapsed = true) {
@@ -196,65 +163,27 @@ const exportChart = (chartId) => {
 };
 
 const chartTypes = {
-  heartrate: {
-    filter: d => d.Heartrate && d.Heartrate !== "",
-    data: d => parseInt(d.Heartrate) || 0,
-    label: 'Heart Rate (BPM)',
-    color: '#dc3545',
-    yLabel: 'BPM',
-    title: 'Heart Rate Over Time'
-  },
+  heartrate: { filter: d => d.Heartrate && d.Heartrate !== "", data: d => parseInt(d.Heartrate) || 0, label: 'Heart Rate (BPM)', color: '#dc3545', title: 'Heart Rate Over Time' },
   battery: {
     filter: d => d['Battery Percentage'] !== undefined && d['Battery Percentage'] !== "",
-    data: d => parseFloat(d['Battery Percentage']) || 0,
-    label: 'Battery %',
-    color: '#28a745',
-    yLabel: 'Battery %',
     title: 'Battery Level Over Time',
     datasets: [
       { key: 'Battery Percentage', label: 'Battery %', color: '#28a745', yAxis: 'y' },
       { key: 'Battery Voltage', label: 'Voltage (V)', color: '#ffc107', yAxis: 'y1' }
     ],
-    scales: {
-      y: { min: 0, max: 100, title: 'Battery %' },
-      y1: { position: 'right', min: 3.0, max: 4.2, title: 'Voltage (V)', grid: false }
-    }
+    scales: { y: { min: 0, max: 100, title: 'Battery %' }, y1: { position: 'right', min: 3.0, max: 4.2, title: 'Voltage (V)', grid: false } }
   },
-  steps: {
-    filter: d => d.Steps !== undefined && d.Steps !== "",
-    data: d => parseInt(d.Steps) || 0,
-    label: 'Steps per Interval',
-    color: '#36a2eb',
-    yLabel: 'Steps per Interval',
-    title: 'Step Count Over Time',
-    type: 'bar',
-    cumulative: true
-  },
-  elevation: {
-    filter: d => d.Altitude && d.Altitude !== "" && !isNaN(parseFloat(d.Altitude)),
-    data: d => convertElevation(parseFloat(d.Altitude)).value,
-    label: () => convertElevation(1).label,
-    color: '#8b5cf6',
-    title: 'Elevation Profile'
-  },
-  speed: {
-    filter: d => d.Latitude && d.Longitude && d.Latitude !== "" && d.Longitude !== "",
-    calculate: true,
-    label: () => convertSpeed(1).label,
-    color: '#f59e0b',
-    title: 'Speed Over Time'
-  },
+  steps: { filter: d => d.Steps !== undefined && d.Steps !== "", data: d => parseInt(d.Steps) || 0, label: 'Steps per Interval', color: '#36a2eb', title: 'Step Count Over Time', type: 'bar', cumulative: true },
+  elevation: { filter: d => d.Altitude && d.Altitude !== "" && !isNaN(parseFloat(d.Altitude)), data: d => convertElevation(parseFloat(d.Altitude)).value, label: () => convertElevation(1).label, color: '#8b5cf6', title: 'Elevation Profile' },
+  speed: { filter: d => d.Latitude && d.Longitude && d.Latitude !== "" && d.Longitude !== "", calculate: true, label: () => convertSpeed(1).label, color: '#f59e0b', title: 'Speed Over Time' },
   barometer: {
     filter: d => d['Barometer Temperature'] !== undefined || d['Barometer Pressure'] !== undefined,
+    title: 'Barometer Data Over Time',
     datasets: [
       { key: 'Barometer Temperature', label: () => convertTemperature(1).label, color: '#ef4444', yAxis: 'y', convert: convertTemperature },
       { key: 'Barometer Pressure', label: 'Pressure (hPa)', color: '#3b82f6', yAxis: 'y1' }
     ],
-    title: 'Barometer Data Over Time',
-    scales: {
-      y: { title: () => convertTemperature(1).label },
-      y1: { position: 'right', title: 'Pressure (hPa)', grid: false }
-    }
+    scales: { y: { title: () => convertTemperature(1).label }, y1: { position: 'right', title: 'Pressure (hPa)', grid: false } }
   }
 };
 
@@ -264,27 +193,22 @@ const createChart = (type, canvasId, trackData) => {
   let data = trackData.filter(config.filter);
   
   if (data.length === 0) {
-    document.getElementById(`content-${canvasId.replace('canvas-', '')}`).innerHTML = 
-      '<div class="no-data-message">No data available</div>';
+    document.getElementById(`content-${canvasId.replace('canvas-', '')}`).innerHTML = '<div class="no-data-message">No data available</div>';
     return null;
   }
 
+  const makeDataset = (label, data, color, opts = {}) => ({
+    label: typeof label === 'function' ? label() : label,
+    data, borderColor: color, backgroundColor: color + '20',
+    borderWidth: 2, fill: opts.fill !== false, tension: 0.1, ...opts
+  });
+
   let datasets = [];
-  
   if (config.datasets) {
-    datasets = config.datasets.map(ds => ({
-      label: typeof ds.label === 'function' ? ds.label() : ds.label,
-      data: data.map(point => {
-        const val = parseFloat(point[ds.key]);
-        return val ? (ds.convert ? ds.convert(val).value : val) : null;
-      }),
-      borderColor: ds.color,
-      backgroundColor: ds.color + '20',
-      borderWidth: 2,
-      fill: false,
-      tension: 0.1,
-      yAxisID: ds.yAxis
-    }));
+    datasets = config.datasets.map(ds => makeDataset(ds.label, data.map(pt => {
+      const val = parseFloat(pt[ds.key]);
+      return val ? (ds.convert ? ds.convert(val).value : val) : null;
+    }), ds.color, { fill: false, yAxisID: ds.yAxis }));
   } else if (type === 'speed') {
     const speeds = [], times = [];
     for (let i = 1; i < data.length; i++) {
@@ -293,69 +217,31 @@ const createChart = (type, canvasId, trackData) => {
         const [lat1, lon1, lat2, lon2] = [prev.Latitude, prev.Longitude, curr.Latitude, curr.Longitude].map(parseFloat);
         const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
         const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const speedKmh = distance / ((curr.Time - prev.Time) / 1000) * 3.6;
+        const speedKmh = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) / ((curr.Time - prev.Time) / 1000) * 3.6;
         if (speedKmh <= 100) {
           speeds.push(convertSpeed(speedKmh).value);
           times.push(curr.Time.toLocaleTimeString());
         }
       }
     }
-    datasets = [{
-      label: config.label(),
-      data: speeds,
-      borderColor: config.color,
-      backgroundColor: config.color + '20',
-      borderWidth: 2,
-      fill: true,
-      tension: 0.1
-    }];
-    data = times.map((time, i) => ({ Time: { toLocaleTimeString: () => time } }));
+    datasets = [makeDataset(config.label, speeds, config.color)];
+    data = times.map(time => ({ Time: { toLocaleTimeString: () => time } }));
   } else if (config.cumulative) {
     let cumulative = 0;
     const cumulativeData = data.map(point => cumulative += config.data(point));
     datasets = [
-      {
-        label: config.label,
-        data: data.map(config.data),
-        backgroundColor: config.color + 'A0',
-        borderColor: config.color,
-        type: 'bar',
-        yAxisID: 'y'
-      },
-      {
-        label: 'Cumulative Steps',
-        data: cumulativeData,
-        borderColor: '#ff6384',
-        backgroundColor: '#ff638420',
-        borderWidth: 2,
-        fill: false,
-        type: 'line',
-        yAxisID: 'y1'
-      }
+      makeDataset(config.label, data.map(config.data), config.color, { backgroundColor: config.color + 'A0', type: 'bar', yAxisID: 'y', fill: false }),
+      makeDataset('Cumulative Steps', cumulativeData, '#ff6384', { fill: false, type: 'line', yAxisID: 'y1' })
     ];
   } else {
-    datasets = [{
-      label: typeof config.label === 'function' ? config.label() : config.label,
-      data: data.map(config.data),
-      borderColor: config.color,
-      backgroundColor: config.color + '20',
-      borderWidth: 2,
-      fill: true,
-      tension: 0.1
-    }];
+    datasets = [makeDataset(config.label, data.map(config.data), config.color)];
   }
 
   const chartConfig = {
     type: config.type || 'line',
-    data: {
-      labels: data.map(point => point.Time ? point.Time.toLocaleTimeString() : ''),
-      datasets
-    },
+    data: { labels: data.map(pt => pt.Time?.toLocaleTimeString() || ''), datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { intersect: false, mode: 'point' },
       plugins: {
         title: { display: true, text: config.title },
@@ -364,38 +250,22 @@ const createChart = (type, canvasId, trackData) => {
       },
       scales: {
         x: { title: { display: true, text: 'Time' } },
-        y: {
-          beginAtZero: type !== 'heartrate',
-          title: { display: true, text: typeof config.yLabel === 'function' ? config.yLabel() : config.yLabel || config.label }
-        }
+        y: { beginAtZero: type !== 'heartrate', title: { display: true, text: typeof config.label === 'function' ? config.label() : config.label || 'Value' } }
       },
       elements: { point: { radius: 2, hoverRadius: 4 } }
     }
   };
 
   if (config.scales) {
-    Object.assign(chartConfig.options.scales, config.scales);
-    Object.keys(config.scales).forEach(axis => {
-      if (config.scales[axis].title && typeof config.scales[axis].title === 'function') {
-        chartConfig.options.scales[axis].title = { display: true, text: config.scales[axis].title() };
-      } else if (config.scales[axis].title) {
-        chartConfig.options.scales[axis].title = { display: true, text: config.scales[axis].title };
-      }
-      if (config.scales[axis].grid === false) {
-        chartConfig.options.scales[axis].grid = { drawOnChartArea: false };
-      }
+    Object.entries(config.scales).forEach(([axis, scale]) => {
+      chartConfig.options.scales[axis] = { ...scale };
+      if (scale.title) chartConfig.options.scales[axis].title = { display: true, text: typeof scale.title === 'function' ? scale.title() : scale.title };
+      if (scale.grid === false) chartConfig.options.scales[axis].grid = { drawOnChartArea: false };
     });
   }
 
   if (config.cumulative) {
-    chartConfig.options.scales.y1 = {
-      type: 'linear',
-      display: true,
-      position: 'right',
-      beginAtZero: true,
-      title: { display: true, text: 'Cumulative Steps' },
-      grid: { drawOnChartArea: false }
-    };
+    chartConfig.options.scales.y1 = { type: 'linear', display: true, position: 'right', beginAtZero: true, title: { display: true, text: 'Cumulative Steps' }, grid: { drawOnChartArea: false } };
   }
 
   return new Chart(ctx, chartConfig);
@@ -407,54 +277,58 @@ const createChartsForTrack = (trackNumber, trackData) => {
   if (!chartsContainer || !trackData.length) return;
 
   const chartDefs = [
-    { type: 'heartrate', id: 'hr', title: 'Heart Rate' },
-    { type: 'battery', id: 'battery', title: 'Battery Level' },
-    { type: 'steps', id: 'steps', title: 'Step Count' },
-    { type: 'elevation', id: 'elevation', title: 'Elevation Profile' },
-    { type: 'speed', id: 'speed', title: 'Speed' },
-    { type: 'barometer', id: 'barometer', title: 'Barometer Data' }
-  ];
+    ['heartrate', 'hr', 'Heart Rate'],
+    ['battery', 'battery', 'Battery Level'],
+    ['steps', 'steps', 'Step Count'],
+    ['elevation', 'elevation', 'Elevation Profile'],
+    ['speed', 'speed', 'Speed'],
+    ['barometer', 'barometer', 'Barometer Data']
+  ].map(([type, id, title]) => ({ type, id, title }));
 
-  const availableCharts = chartDefs.filter(chart => 
-    trackData.some(chartTypes[chart.type].filter)
-  );
+  const availableCharts = chartDefs.filter(({ type }) => trackData.some(chartTypes[type].filter));
 
-  if (availableCharts.length === 0) {
+  if (!availableCharts.length) {
     chartsContainer.innerHTML = '<div class="no-data-message">No sensor data available for visualization</div>';
     return;
   }
 
-  chartsContainer.innerHTML = availableCharts
-    .map(chart => createChartContainer(`${chart.id}-${trackNumber}`, chart.title))
-    .join('');
-
+  chartsContainer.innerHTML = availableCharts.map(({ id, title }) => createChartContainer(`${id}-${trackNumber}`, title)).join('');
   trackCharts[trackNumber] = {};
-  setTimeout(() => {
-    availableCharts.forEach(chart => {
-      trackCharts[trackNumber][chart.id] = createChart(chart.type, `canvas-${chart.id}-${trackNumber}`, trackData);
-    });
-  }, 100);
-};
-
-const cleanupCharts = () => {
-  Object.values(trackCharts).forEach(trackChartSet => {
-    Object.values(trackChartSet).forEach(chart => {
-      if (chart && chart.destroy) chart.destroy();
+  
+  requestAnimationFrame(() => {
+    availableCharts.forEach(({ type, id }) => {
+      try {
+        trackCharts[trackNumber][id] = createChart(type, `canvas-${id}-${trackNumber}`, trackData);
+      } catch (e) {
+        console.error(`Error creating ${type} chart:`, e);
+      }
     });
   });
-  trackCharts = {};
+};
+
+const cleanupCharts = (trackNumber = null) => {
+  if (trackNumber && trackCharts[trackNumber]) {
+    Object.values(trackCharts[trackNumber]).forEach(chart => {
+      if (chart && chart.destroy) chart.destroy();
+    });
+    delete trackCharts[trackNumber];
+  } else {
+    Object.values(trackCharts).forEach(trackChartSet => {
+      Object.values(trackChartSet).forEach(chart => {
+        if (chart && chart.destroy) chart.destroy();
+      });
+    });
+    trackCharts = {};
+  }
 };
 
 function filterGPSCoordinates(track) {
-  var allowNoGPS = localStorage.getItem("recorder-allow-no-gps")=="true";
-  if (!allowNoGPS)
-    return track.filter(pt=>pt.Latitude!="" && pt.Longitude!="");
+  const allowNoGPS = localStorage.getItem("recorder-allow-no-gps")=="true";
+  if (!allowNoGPS) return track.filter(pt=>pt.Latitude!="" && pt.Longitude!="");
   return track.map(pt => {
-    if (!isFinite(parseFloat(pt.Latitude))) pt.Latitude=0;
-    if (!isFinite(parseFloat(pt.Longitude))) pt.Longitude=0;
-    if (!isFinite(parseFloat(pt.Altitude))) pt.Altitude=0;
+    ['Latitude', 'Longitude', 'Altitude'].forEach(k => { if (!isFinite(parseFloat(pt[k]))) pt[k]=0; });
     return pt;
-  })
+  });
 }
 
 function saveKML(track,title) {
@@ -648,87 +522,57 @@ function createLeafletMap(containerId, coordinates, fullTrack) {
         const allIndicators = []; // Track small indicator markers
         let activeMarkerIndex = null; // Track which marker is currently active
         
-        // Function to generate popup content for any point
+        // Generate popup content for any point
         const generatePopupContent = (pointData, pointIndex) => {
-          let content = `<div style="font-size: 12px; line-height: 1.4;">`;
-          
-          if (pointData.Time) {
-            content += `<strong>🕐 ${pointData.Time.toLocaleTimeString()}</strong><br>`;
-          }
-          
-          if (pointData.Heartrate && pointData.Heartrate !== "") {
-            content += `❤️ ${pointData.Heartrate} BPM<br>`;
-          }
-          
+          const items = [];
+          if (pointData.Time) items.push(`<strong>🕐 ${pointData.Time.toLocaleTimeString()}</strong>`);
+          if (pointData.Heartrate && pointData.Heartrate !== "") items.push(`❤️ ${pointData.Heartrate} BPM`);
           if (pointData.Altitude && pointData.Altitude !== "") {
-            const elevation = convertElevation(parseFloat(pointData.Altitude));
-            content += `⛰️ ${elevation.value.toFixed(0)} ${elevation.unit}<br>`;
+            const elev = convertElevation(parseFloat(pointData.Altitude));
+            items.push(`⛰️ ${elev.value.toFixed(0)} ${elev.unit}`);
           }
           
-          // Calculate speed if we have adjacent points
+          // Calculate speed from previous point
           if (pointIndex > 0 && gpsPoints[pointIndex-1].Time && pointData.Time) {
-            const prevPoint = gpsPoints[pointIndex-1];
-            const prevLat = parseFloat(prevPoint.Latitude);
-            const prevLon = parseFloat(prevPoint.Longitude);
-            const currLat = parseFloat(pointData.Latitude);
-            const currLon = parseFloat(pointData.Longitude);
-            
-            if (!isNaN(prevLat) && !isNaN(prevLon) && !isNaN(currLat) && !isNaN(currLon)) {
-              const R = 6371000;
-              const dLat = (currLat - prevLat) * Math.PI / 180;
-              const dLon = (currLon - prevLon) * Math.PI / 180;
-              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                        Math.cos(prevLat * Math.PI / 180) * Math.cos(currLat * Math.PI / 180) *
-                        Math.sin(dLon/2) * Math.sin(dLon/2);
-              const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-              const timeDiff = (pointData.Time - prevPoint.Time) / 1000;
-              
-              if (timeDiff > 0) {
-                const speedKmh = (distance / timeDiff) * 3.6;
-                if (speedKmh <= 100) {
-                  const speed = convertSpeed(speedKmh);
-                  content += `🏃 ${speed.value.toFixed(1)} ${speed.unit}<br>`;
-                }
+            const prev = gpsPoints[pointIndex-1];
+            const [lat1, lon1, lat2, lon2] = [prev.Latitude, prev.Longitude, pointData.Latitude, pointData.Longitude].map(parseFloat);
+            if ([lat1, lon1, lat2, lon2].every(v => !isNaN(v))) {
+              const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+              const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+              const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              const speedKmh = dist / ((pointData.Time - prev.Time) / 1000) * 3.6;
+              if (speedKmh <= 100) {
+                const speed = convertSpeed(speedKmh);
+                items.push(`🏃 ${speed.value.toFixed(1)} ${speed.unit}`);
               }
             }
           }
           
           if (pointData['Battery Percentage'] !== undefined && pointData['Battery Percentage'] !== "") {
-            content += `🔋 ${pointData['Battery Percentage']}%`;
+            let battery = `🔋 ${pointData['Battery Percentage']}%`;
             if (pointData['Battery Voltage'] !== undefined && pointData['Battery Voltage'] !== "") {
-              content += ` (${parseFloat(pointData['Battery Voltage']).toFixed(2)}V)`;
+              battery += ` (${parseFloat(pointData['Battery Voltage']).toFixed(2)}V)`;
             }
-            content += `<br>`;
+            items.push(battery);
           }
           
           if (pointData.Steps !== undefined && pointData.Steps !== "") {
-            // Calculate cumulative steps up to this point using all track data
-            let cumulativeSteps = 0;
             const currentTime = pointData.Time.getTime();
-            
-            // Sum all steps from the full track up to current timestamp
-            for (let i = 0; i < fullTrack.length; i++) {
-              if (fullTrack[i].Time && fullTrack[i].Time.getTime() <= currentTime) {
-                const stepValue = parseInt(fullTrack[i].Steps) || 0;
-                cumulativeSteps += stepValue;
-              } else {
-                break; // Stop when we reach future points
-              }
-            }
-            content += `👣 ${cumulativeSteps.toLocaleString()} total steps<br>`;
+            const cumSteps = fullTrack.reduce((sum, pt) => 
+              pt.Time && pt.Time.getTime() <= currentTime ? sum + (parseInt(pt.Steps) || 0) : sum, 0);
+            items.push(`👣 ${cumSteps.toLocaleString()} total steps`);
           }
           
           if (pointData['Barometer Temperature'] !== undefined && pointData['Barometer Temperature'] !== "") {
             const temp = convertTemperature(parseFloat(pointData['Barometer Temperature']));
-            content += `🌡️ ${temp.value.toFixed(1)} ${temp.unit}<br>`;
+            items.push(`🌡️ ${temp.value.toFixed(1)} ${temp.unit}`);
           }
           
           if (pointData['Barometer Pressure'] !== undefined && pointData['Barometer Pressure'] !== "") {
-            content += `🌀 ${parseFloat(pointData['Barometer Pressure']).toFixed(1)} hPa<br>`;
+            items.push(`🌀 ${parseFloat(pointData['Barometer Pressure']).toFixed(1)} hPa`);
           }
           
-          content += `</div>`;
-          return content;
+          return `<div style="font-size: 12px; line-height: 1.4;">${items.join('<br>')}</div>`;
         };
         
         gpsPoints.forEach((point, index) => {
@@ -736,156 +580,72 @@ function createLeafletMap(containerId, coordinates, fullTrack) {
           const lon = parseFloat(point.Longitude);
           
           if (!isNaN(lat) && !isNaN(lon)) {
-            // Create selection marker (invisible by default)
-            const marker = L.circleMarker([lat, lon], {
-              radius: 10,
-              weight: 1,
-              fillOpacity: 0.01,
-              opacity: 0.01,
-              color: '#2563eb',
-              fillColor: '#2563eb'
-            }).addTo(map);
-            
-            // Create small indicator marker (always visible)
-            const indicator = L.circleMarker([lat, lon], {
-              radius: 3,
-              weight: 1,
-              fillOpacity: 0.8,
-              opacity: 1,
-              color: '#999',
-              fillColor: '#999',
-              interactive: false  // Don't interfere with clicks
-            }).addTo(map);
-            
-            allMarkers.push(marker); // Store marker reference
-            allIndicators.push(indicator); // Store indicator reference
-            
-            // Store the index and data on the marker for reference
-            marker._index = index;
-            marker._pointData = point;
+            const marker = L.circleMarker([lat, lon], { radius: 10, weight: 1, fillOpacity: 0.01, opacity: 0.01, color: '#2563eb', fillColor: '#2563eb' }).addTo(map);
+            const indicator = L.circleMarker([lat, lon], { radius: 3, weight: 1, fillOpacity: 0.8, opacity: 1, color: '#999', fillColor: '#999', interactive: false }).addTo(map);
+            allMarkers.push(marker);
+            allIndicators.push(indicator);
+            Object.assign(marker, { _index: index, _pointData: point });
           }
         });
         
-        // Map-level click handler for better marker selection
-        map.on('click', function(e) {
+        // Map click handler for marker selection
+        map.on('click', e => {
           const clickLatLng = e.latlng;
-          let closestMarker = null;
-          let closestDistance = Infinity;
-          let closestIndex = -1;
-          
-          // First check if click is near the polyline
           const closestPointOnLine = L.GeometryUtil.closest(map, polyline.getLatLngs(), clickLatLng);
-          const nearPolyline = closestPointOnLine && closestPointOnLine.distance <= 20;
+          const nearPolyline = closestPointOnLine?.distance <= 20;
           
-          // Find closest marker to click point
-          for (let i = 0; i < allMarkers.length; i++) {
-            const marker = allMarkers[i];
-            const markerLatLng = marker.getLatLng();
-            const distance = map.distance(clickLatLng, markerLatLng);
-            
-            if (distance < closestDistance) {
-              closestDistance = distance;
-              closestMarker = marker;
-              closestIndex = i;
-            }
-          }
+          // Find closest marker
+          let [closestMarker, closestIndex, closestDistance] = [null, -1, Infinity];
+          allMarkers.forEach((marker, i) => {
+            const distance = map.distance(clickLatLng, marker.getLatLng());
+            if (distance < closestDistance) [closestMarker, closestIndex, closestDistance] = [marker, i, distance];
+          });
           
-          // Convert distance to pixels to check against marker radius
+          // Check if click is near marker or polyline
           const zoom = map.getZoom();
-          const metersPerPixel = 40075016.686 * Math.abs(Math.cos(clickLatLng.lat * Math.PI / 180)) / Math.pow(2, zoom + 8);
-          const pixelDistance = closestDistance / metersPerPixel;
+          const pixelDistance = closestDistance / (40075016.686 * Math.abs(Math.cos(clickLatLng.lat * Math.PI / 180)) / Math.pow(2, zoom + 8));
           
-          // If near polyline OR within marker radius, select the closest marker
           if (closestMarker && (nearPolyline || pixelDistance <= 15)) {
-            // Reset previous active marker if any
+            // Reset previous marker
             if (activeMarkerIndex !== null && activeMarkerIndex !== closestIndex) {
-              allMarkers[activeMarkerIndex].setStyle({
-                fillOpacity: 0.01,
-                opacity: 0.01,
-                radius: 10
-              });
+              allMarkers[activeMarkerIndex].setStyle({ fillOpacity: 0.01, opacity: 0.01, radius: 10 });
             }
-            
-            // Show this marker is active
-            closestMarker.setStyle({
-              fillOpacity: 0.5,
-              opacity: 0.8,
-              radius: 12
-            });
-            
-            // Update active marker index
+            // Activate new marker
+            closestMarker.setStyle({ fillOpacity: 0.5, opacity: 0.8, radius: 12 });
             activeMarkerIndex = closestIndex;
-            
-            // Show popup
-            const content = generatePopupContent(closestMarker._pointData, closestIndex);
-            closestMarker.bindPopup(content).openPopup();
-          } else {
-            // Click was not near polyline or marker - clear active marker
-            if (activeMarkerIndex !== null) {
-              allMarkers[activeMarkerIndex].setStyle({
-                fillOpacity: 0.01,
-                opacity: 0.01,
-                radius: 10
-              });
-              activeMarkerIndex = null;
-            }
+            closestMarker.bindPopup(generatePopupContent(closestMarker._pointData, closestIndex)).openPopup();
+          } else if (activeMarkerIndex !== null) {
+            // Clear active marker
+            allMarkers[activeMarkerIndex].setStyle({ fillOpacity: 0.01, opacity: 0.01, radius: 10 });
+            activeMarkerIndex = null;
           }
         });
         
-        // Add mousemove handler to detect when cursor is near the track line
-        map.on('mousemove', function(e) {
-          const mouseLatLng = e.latlng;
-          
-          // Get closest point on polyline to mouse position
-          const closest = L.GeometryUtil.closest(map, polyline.getLatLngs(), mouseLatLng);
-          
-          // Check if we're within 20 pixels of the line
-          if (closest && closest.distance <= 20) {
-            // Near the track line - disable dragging
-            map.dragging.disable();
-            map._container.style.cursor = 'pointer';
-          } else {
-            // Far from track line - enable dragging
-            map.dragging.enable();
-            map._container.style.cursor = '';
-          }
+        // Handle dragging near track line
+        map.on('mousemove', e => {
+          const closest = L.GeometryUtil.closest(map, polyline.getLatLngs(), e.latlng);
+          const nearLine = closest?.distance <= 20;
+          map.dragging[nearLine ? 'disable' : 'enable']();
+          map._container.style.cursor = nearLine ? 'pointer' : '';
         });
         
-        // Re-enable dragging when mouse leaves the map
-        map.on('mouseout', function() {
+        map.on('mouseout', () => {
           map.dragging.enable();
           map._container.style.cursor = '';
         });
       }
       
-      // Start marker
-      const startMarker = L.circleMarker(coordinates[0], {
-        radius: 6,
-        fillColor: '#22c55e',
-        color: '#fff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.8,
-        bubblingMouseEvents: false
-      }).addTo(map).bindPopup(startTime ? `Start - ${startTime}` : 'Start');
+      // Start/end markers
+      const markerStyle = { radius: 6, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8, bubblingMouseEvents: false };
+      const addMarker = (coord, color, text) => {
+        const marker = L.circleMarker(coord, { ...markerStyle, fillColor: color }).addTo(map).bindPopup(text);
+        marker.on('click dblclick mousedown mouseup touchstart touchend', L.DomEvent.stopPropagation);
+        return marker;
+      };
       
-      // Prevent event propagation on start marker
-      startMarker.on('click dblclick mousedown mouseup touchstart touchend', L.DomEvent.stopPropagation);
-      
-      // End marker
+      addMarker(coordinates[0], '#22c55e', startTime ? `Start - ${startTime}` : 'Start');
       if (coordinates.length > 1) {
-        const endMarker = L.circleMarker(coordinates[coordinates.length - 1], {
-          radius: 6,
-          fillColor: '#ef4444',
-          color: '#fff',
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 0.8,
-          bubblingMouseEvents: false
-        }).addTo(map).bindPopup(endTime ? `End - ${endTime}` : 'End');
-        
-        // Prevent event propagation on end marker
-        endMarker.on('click dblclick mousedown mouseup touchstart touchend', L.DomEvent.stopPropagation);
+        addMarker(coordinates[coordinates.length - 1], '#ef4444', endTime ? `End - ${endTime}` : 'End');
       }
       
       map.fitBounds(polyline.getBounds().pad(0.1));
@@ -900,18 +660,24 @@ function createLeafletMap(containerId, coordinates, fullTrack) {
   }
 }
 
-function cleanupMaps() {
-  Object.values(leafletMaps).forEach(map => {
-    if (map && map.remove) map.remove();
-  });
-  leafletMaps = {};
-  cleanupCharts();
+function cleanupMaps(mapId = null) {
+  if (mapId && leafletMaps[mapId]) {
+    if (leafletMaps[mapId].remove) leafletMaps[mapId].remove();
+    delete leafletMaps[mapId];
+  } else {
+    Object.values(leafletMaps).forEach(map => {
+      if (map && map.remove) map.remove();
+    });
+    leafletMaps = {};
+  }
 }
 
 function getTrackList() {
   Util.showModal("Loading Track List...");
   domTracks.innerHTML = "";
   cleanupMaps();
+  cleanupCharts();
+  currentTrackNumber = null;
   
   Puck.eval(`require("Storage").list(/^recorder\\.log.*\\.csv$/,{sf:1})`,files=>{
     var trackList = [];
@@ -951,40 +717,37 @@ function getTrackList() {
     });
     
     promise.then(() => {
+      // Sort tracks by track number (descending) so newest is first
+      trackList.sort((a, b) => {
+        return b.number.localeCompare(a.number);
+      });
+      
       var html = `
       <div class="container">
-      <h2>GPS Tracks</h2>
-      <div class="columns">`;
+      <h2>GPS Tracks</h2>`;
       
-      trackList.forEach((track, index) => {
-        var trackData = trackLineToObject(track.info.headers, track.info.l);
-        var mapId = `map-${track.number}`;
+      if (trackList.length > 0) {
+        // Create track selector
+        html += `
+        <div class="form-group">
+          <label class="form-label" for="track-selector">Select Track:</label>
+          <select class="form-select" id="track-selector">`;
+        
+        trackList.forEach((track, index) => {
+          var trackData = trackLineToObject(track.info.headers, track.info.l);
+          var dateStr = trackData.Time ? 
+            trackData.Time.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) + 
+            ' at ' + trackData.Time.toLocaleTimeString() : 
+            "No date info";
+          html += `<option value="${index}">Track ${track.number} - ${dateStr}</option>`;
+        });
         
         html += `
-         <div class="column col-12">
-           <div class="card">
-             <div class="card-header">
-               <div class="card-title h5">Track ${track.number}</div>
-               <div class="card-subtitle text-gray">${trackData.Time?trackData.Time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + trackData.Time.toLocaleTimeString():"No track data"}</div>
-             </div>
-${trackData.Latitude ? `
-             <div class="card-body">
-               <div id="${mapId}" class="leaflet-map"></div>
-               <div class="track-stats">
-                 <span id="stats-${track.number}">Loading...</span>
-               </div>
-               <div id="charts-${track.number}" class="charts-container"></div>
-             </div>` : `<div class="card-body">No GPS info</div>`}
-             <div class="card-footer">
-               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadkml">Download KML</button>
-               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadgpx">Download GPX</button>
-               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadcsv">Download CSV</button>
-               <button class="btn btn-default" filename="${track.filename}" trackid="${track.number}" task="delete">Delete</button>
-             </div>
-           </div>
-         </div>
-        `;
-      });
+          </select>
+        </div>`;
+      }
+      
+      html += `<div id="selected-track-container"></div>`;
       
       if (trackList.length==0) {
         html += `
@@ -998,18 +761,15 @@ ${trackData.Latitude ? `
          </div>`;
       }
       
-      html += `
-        </div>
+      html += `</div>
         <h2>Batch Operations</h2>
         <div class="form-group">
-          <button class="btn btn-primary" task="downloadkml_all">Download all KML</button>
-          <button class="btn btn-primary" task="downloadgpx_all">Download all GPX</button>
-          <button class="btn btn-primary" task="downloadcsv_all">Download all CSV</button>
+          ${['KML', 'GPX', 'CSV'].map(fmt => `<button class="btn btn-primary" task="download${fmt.toLowerCase()}_all">Download all ${fmt}</button>`).join(' ')}
         </div>
         <h2>Settings</h2>
         <div class="form-group">
           <label class="form-switch">
-            <input type="checkbox" id="settings-allow-no-gps" ${(localStorage.getItem("recorder-allow-no-gps")=="true")?"checked":""}>
+            <input type="checkbox" id="settings-allow-no-gps" ${localStorage.getItem("recorder-allow-no-gps")=="true" ? "checked" : ""}>
             <i class="form-icon"></i> Include GPX/KML entries even when there's no GPS info
           </label>
         </div>
@@ -1020,24 +780,66 @@ ${trackData.Latitude ? `
             <option value="metric">Metric (km/h, °C, m)</option>
             <option value="imperial">Imperial (mph, °F, ft)</option>
           </select>
-        </div>
-        </div>`;
+        </div></div>`;
       
       domTracks.innerHTML = html;
       
-      // Initialize individual maps
-      trackList.forEach((track, index) => {
-        var trackData = trackLineToObject(track.info.headers, track.info.l);
+      // Function to display a single track
+      function displayTrack(trackIndex) {
+        const selectedContainer = document.getElementById('selected-track-container');
+        if (!selectedContainer || trackIndex >= trackList.length) return;
+        
+        // Show loading state
+        selectedContainer.innerHTML = '<div class="text-center" style="padding: 20px;">Loading track...</div>';
+        
+        // Clean up previous track's resources
+        if (currentTrackNumber !== null) {
+          cleanupMaps(`map-${currentTrackNumber}`);
+          cleanupCharts(currentTrackNumber);
+        }
+        
+        const track = trackList[trackIndex];
+        const trackData = trackLineToObject(track.info.headers, track.info.l);
+        currentTrackNumber = track.number;
+        
+        // Generate track HTML
+        let trackHtml = `
+         <div class="columns">
+         <div class="column col-12">
+           <div class="card">
+             <div class="card-header">
+               <div class="card-title h5">Track ${track.number}</div>
+               <div class="card-subtitle text-gray">${trackData.Time?trackData.Time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + trackData.Time.toLocaleTimeString():"No track data"}</div>
+             </div>
+${trackData.Latitude ? `
+             <div class="card-body">
+               <div id="map-${track.number}" class="leaflet-map"></div>
+               <div class="track-stats">
+                 <span id="stats-${track.number}">Loading...</span>
+               </div>
+               <div id="charts-${track.number}" class="charts-container"></div>
+             </div>` : `<div class="card-body">No GPS info</div>`}
+             <div class="card-footer">
+               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadkml">Download KML</button>
+               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadgpx">Download GPX</button>
+               <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadcsv">Download CSV</button>
+               <button class="btn btn-default" filename="${track.filename}" trackid="${track.number}" task="delete">Delete</button>
+             </div>
+           </div>
+         </div>
+         </div>`;
+         
+        selectedContainer.innerHTML = trackHtml;
+        
+        // Initialize map and charts for this track
         if (trackData.Latitude) {
-          var mapId = `map-${track.number}`;
-          
           downloadTrack(track.filename, fullTrack => {
             var coordinates = fullTrack
               .filter(pt => pt.Latitude && pt.Longitude && pt.Latitude != "" && pt.Longitude != "")
               .map(pt => [parseFloat(pt.Latitude), parseFloat(pt.Longitude)]);
             
             if (coordinates.length > 0) {
-              createLeafletMap(mapId, coordinates, fullTrack);
+              createLeafletMap(`map-${track.number}`, coordinates, fullTrack);
               
               // Calculate stats
               var distance = 0;
@@ -1063,7 +865,20 @@ ${trackData.Latitude ? `
             createChartsForTrack(track.number, fullTrack);
           });
         }
-      });
+      }
+      
+      // Wire up track selector
+      if (trackList.length > 0) {
+        const selector = document.getElementById('track-selector');
+        if (selector) {
+          selector.addEventListener('change', (e) => {
+            displayTrack(parseInt(e.target.value));
+          });
+          
+          // Display the first track by default (newest)
+          displayTrack(0);
+        }
+      }
       
       document.getElementById("settings-allow-no-gps").addEventListener("change",event=>{
         localStorage.setItem("recorder-allow-no-gps", event.target.checked);
@@ -1072,34 +887,17 @@ ${trackData.Latitude ? `
       // Initialize units selector
       const unitsSelector = document.getElementById("settings-units");
       const currentSettings = getLocalizationSettings();
-      if (currentSettings.auto) {
-        unitsSelector.value = "auto";
-      } else if (currentSettings.speed === 'kmh') {
-        unitsSelector.value = "metric";
-      } else {
-        unitsSelector.value = "imperial";
-      }
+      unitsSelector.value = currentSettings.auto ? "auto" : (currentSettings.speed === 'kmh' ? "metric" : "imperial");
       
-      unitsSelector.addEventListener("change", event => {
-        const value = event.target.value;
-        if (value === "auto") {
-          localStorage.removeItem("recorder-units");
-        } else if (value === "metric") {
-          saveLocalizationSettings({
-            speed: 'kmh',
-            distance: 'km', 
-            temperature: 'celsius',
-            elevation: 'm'
-          });
-        } else if (value === "imperial") {
-          saveLocalizationSettings({
-            speed: 'mph',
-            distance: 'mi',
-            temperature: 'fahrenheit', 
-            elevation: 'ft'
-          });
-        }
-        // Reload to apply new units
+      unitsSelector.addEventListener("change", e => {
+        const val = e.target.value;
+        if (val === "auto") localStorage.removeItem("recorder-units");
+        else saveLocalizationSettings({
+          speed: val === "metric" ? 'kmh' : 'mph',
+          distance: val === "metric" ? 'km' : 'mi',
+          temperature: val === "metric" ? 'celsius' : 'fahrenheit',
+          elevation: val === "metric" ? 'm' : 'ft'
+        });
         getTrackList();
       });
       
@@ -1160,7 +958,7 @@ function onInit() {
       e.preventDefault();
       
       if (e.target.href.includes('openstreetmap.org')) {
-        alert('Map data © OpenStreetMap contributors\nLicense: Open Database License (ODbL)\nWebsite: openstreetmap.org/copyright');
+        alert('Map data from OpenStreetMap\nLicense: Open Database License (ODbL)\nWebsite: openstreetmap.org/copyright');
       } else {
         alert('Leaflet © Volodymyr Agafonkin\nLicense: BSD 2-Clause\nWebsite: leafletjs.com');
       }
