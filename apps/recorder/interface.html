@@ -811,14 +811,14 @@ function getTrackList() {
                <div class="card-title h5">Track ${track.number}</div>
                <div class="card-subtitle text-gray">${trackData.Time?trackData.Time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + trackData.Time.toLocaleTimeString():"No track data"}</div>
              </div>
-${trackData.Latitude ? `
              <div class="card-body">
+${trackData.Latitude ? `
                <div id="map-${track.number}" class="leaflet-map"></div>
                <div class="track-stats">
                  <span id="stats-${track.number}">Loading...</span>
-               </div>
+               </div>` : ''}
                <div id="charts-${track.number}" class="charts-container"></div>
-             </div>` : `<div class="card-body">No GPS info</div>`}
+             </div>
              <div class="card-footer">
                <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadkml">Download KML</button>
                <button class="btn btn-primary" filename="${track.filename}" trackid="${track.number}" task="downloadgpx">Download GPX</button>
@@ -832,9 +832,10 @@ ${trackData.Latitude ? `
         selectedContainer.innerHTML = trackHtml;
         attachTrackButtonListeners(selectedContainer);
         
-        // Initialize map and charts for this track
-        if (trackData.Latitude) {
-          downloadTrack(track.filename, fullTrack => {
+        // Always download track data to create charts, regardless of GPS availability
+        downloadTrack(track.filename, fullTrack => {
+          // Initialize map if GPS data exists
+          if (trackData.Latitude) {
             var coordinates = fullTrack
               .filter(pt => pt.Latitude && pt.Longitude && pt.Latitude != "" && pt.Longitude != "")
               .map(pt => [parseFloat(pt.Latitude), parseFloat(pt.Longitude)]);
@@ -861,11 +862,11 @@ ${trackData.Latitude ? `
                    <strong>Points:</strong> ${coordinates.length}`;
               }
             }
-            
-            // Create charts for this track
-            createChartsForTrack(track.number, fullTrack);
-          });
-        }
+          }
+          
+          // Always create charts for this track (will show available sensor data)
+          createChartsForTrack(track.number, fullTrack);
+        });
       }
 
       function attachTrackButtonListeners(container) {
