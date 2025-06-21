@@ -830,6 +830,7 @@ ${trackData.Latitude ? `
          </div>`;
          
         selectedContainer.innerHTML = trackHtml;
+        attachTrackButtonListeners(selectedContainer);
         
         // Initialize map and charts for this track
         if (trackData.Latitude) {
@@ -865,6 +866,40 @@ ${trackData.Latitude ? `
             createChartsForTrack(track.number, fullTrack);
           });
         }
+      }
+
+      function attachTrackButtonListeners(container) {
+        const buttons = container.querySelectorAll("button[task]");
+        
+        buttons.forEach(button => {
+          button.addEventListener("click", event => {
+            var button = event.currentTarget;
+            var filename = button.getAttribute("filename");
+            var trackid = parseInt(button.getAttribute("trackid"));
+            var task = button.getAttribute("task");
+      
+            if (!filename || trackid === undefined) return;
+      
+            switch(task) {
+              case "delete":
+                Util.showModal(`Deleting ${filename}...`);
+                Util.eraseStorageFile(filename, () => {
+                  Util.hideModal();
+                  getTrackList();
+                });
+                break;
+              case "downloadkml":
+                downloadTrack(filename, track => saveKML(track, `Bangle.js Track ${trackid}`));
+                break;
+              case "downloadgpx":
+                downloadTrack(filename, track => saveGPX(track, `Bangle.js Track ${trackid}`));
+                break;
+              case "downloadcsv":
+                downloadTrack(filename, track => saveCSV(track, `Bangle.js Track ${trackid}`));
+                break;
+            }
+          });
+        });
       }
       
       // Wire up track selector
