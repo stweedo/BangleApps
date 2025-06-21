@@ -937,35 +937,15 @@ ${trackData.Latitude ? `
       });
       
       Util.hideModal();
-      
-      // Event handlers
-      var buttons = domTracks.querySelectorAll("button");
-      for (var i=0;i<buttons.length;i++) {
-        buttons[i].addEventListener("click",event => {
+
+      // Event handlers for batch operations only
+      var batchButtons = domTracks.querySelectorAll("button[task$='_all']");
+      for (var i = 0; i < batchButtons.length; i++) {
+        batchButtons[i].addEventListener("click", event => {
           var button = event.currentTarget;
-          var filename = button.getAttribute("filename");
-          var trackid = parseInt(button.getAttribute("trackid"));
           var task = button.getAttribute("task");
-
-          if (!/_all$/.test(task) && (!filename || trackid===undefined)) return;
-
+      
           switch(task) {
-            case "delete":
-              Util.showModal(`Deleting ${filename}...`);
-              Util.eraseStorageFile(filename,()=>{
-                Util.hideModal();
-                getTrackList();
-              });
-              break;
-            case "downloadkml":
-              downloadTrack(filename, track => saveKML(track, `Bangle.js Track ${trackid}`));
-              break;
-            case "downloadgpx":
-              downloadTrack(filename, track => saveGPX(track, `Bangle.js Track ${trackid}`));
-              break;
-            case "downloadcsv":
-              downloadTrack(filename, track => saveCSV(track, `Bangle.js Track ${trackid}`));
-              break;
             case "downloadkml_all":
               downloadAll(trackList, saveKML);
               break;
