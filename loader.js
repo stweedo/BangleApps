@@ -100,15 +100,17 @@ function sendUsageStats() {
 
 var originalAppJSON = undefined;
 function filterAppsForDevice(deviceId) {
+  if (!device.connected) device.id = deviceId;
+
   if (originalAppJSON===undefined && appJSON.length)
     originalAppJSON = appJSON;
 
-  var device = DEVICEINFO.find(d=>d.id==deviceId);
+  var deviceInfo = DEVICEINFO.find(d=>d.id==deviceId);
   // set the device dropdown
-  document.querySelector(".devicetype-nav span").innerText = device ? device.name : "All apps";
+  document.querySelector(".devicetype-nav span").innerText = deviceInfo ? deviceInfo.name : "All apps";
 
   if (originalAppJSON) { // JSON might not have loaded yet
-    if (!device) {
+    if (!deviceInfo) {
       if (deviceId!==undefined)
         showToast(`Device ID ${deviceId} not recognised. Some apps may not work`, "warning");
       appJSON = originalAppJSON;
